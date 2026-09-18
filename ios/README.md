@@ -27,8 +27,8 @@ bubble as one person, switch to the other, tap it. On a device pick a team under
 *Signing & Capabilities* for both targets.
 
 The extension code was written without Xcode at hand (Linux container). It parses cleanly,
-but expect a few compiler complaints on the first build, most likely supabase-swift API
-names that moved between 2.x releases (`postgresChange`, `subscribe`, `removeChannel`).
+but expect a few compiler complaints on the first build, most likely in the supabase-swift
+calls in `MarketStore.swift`.
 
 ## How the extension works
 
@@ -42,8 +42,9 @@ and *Join*. Tapping any of them expands the extension.
 
 **Board** (`BoardView`): the reference League Market layout. Header with equity and cash,
 a row per team with a *bid / ask* cell and the mark underneath, then your open orders,
-positions, standings and the tape. Pull to refresh; realtime changes on `orders` and
-`trades` also refresh it (`MarketStore.subscribe`).
+positions, standings and the tape. Pull to refresh; while a league is open the store also
+re-fetches the book every 8 seconds (`MarketStore.subscribe`). Supabase Realtime can
+replace the poll once a Mac build pins the SDK version.
 
 **Order ticket** (`OrderTicketView`): book ladder, buy/sell, price and size steppers with
 "lift the ask / join the bid / improve" chips, a plain-English preview, and a *Post the

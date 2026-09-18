@@ -23,16 +23,14 @@ final class MarketStore {
     private(set) var trades: [Trade] = []         // newest first
     private(set) var positions: [Position] = []   // everyone's, for standings
     private(set) var members: [MemberRow] = []
-    private(set) var isLive = false
+    private(set) var isLive = false          // polling while a league is open
 
     var isBusy = false
     var errorMessage: String?
     var toast: String?
 
     private let client = Backend.client
-    private var channel: RealtimeChannelV2?
-    private var listeners: [Task<Void, Never>] = []
-    private var refreshTask: Task<Void, Never>?
+    private var pollTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
 
     // MARK: - Session
@@ -274,44 +272,27 @@ final class MarketStore {
         members.first(where: { $0.user_id == userID })?.name ?? "Trader"
     }
 
-    // MARK: - Realtime
+    // MARK: - Live updates
 
+    /// Poll the book while a league is open. The extension is only on screen in short
+    /// bursts, and the bubble is the real notification, so a light poll is enough.
+    /// (Supabase Realtime can replace this once the SDK version is pinned by a Mac build.)
     private func subscribe(to leagueID: UUID) async {
         await unsubscribe()
-        let ch = client.channel("league-\(leagueID.uuidString.lowercased())")
-        let orderStream = ch.postgresChange(AnyAction.self, schema: "public", table: "orders")
-        let tradeStream = ch.postgresChange(AnyAction.self, schema: "public", table: "trades")
-        await ch.subscribe()
-        channel = ch
         isLive = true
-        listeners = [
-            Task { [weak self] in
-                for await _ in orderStream { await self?.scheduleRefresh() }
-            },
-            Task { [weak self] in
-                for await _ in tradeStream { await self?.scheduleRefresh() }
-            },
-        ]
+        pollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(8))
+                guard !Task.isCancelled, let self, self.league?.id == leagueID else { return }
+                await self.refresh()
+            }
+        }
     }
 
     private func unsubscribe() async {
-        listeners.forEach { $0.cancel() }
-        listeners = []
-        if let ch = channel {
-            await client.removeChannel(ch)
-        }
-        channel = nil
+        pollTask?.cancel()
+        pollTask = nil
         isLive = false
-    }
-
-    /// Coalesce bursts of change events into one reload.
-    private func scheduleRefresh() {
-        refreshTask?.cancel()
-        refreshTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled else { return }
-            await self?.refresh()
-        }
     }
 
     // MARK: - UI helpers

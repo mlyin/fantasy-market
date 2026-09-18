@@ -25,7 +25,11 @@ workflows:
           xcode-project use-profiles
       - name: Build archive
         script: |
-          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+          # App Store Connect rejects a repeated build number, so stamp every archive
+          # with Codemagic's own build counter (both targets get the same value).
+          BUILD_NO=${PROJECT_BUILD_NUMBER:-${BUILD_NUMBER:-1}}
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NO"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
