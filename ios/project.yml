@@ -7,6 +7,10 @@ settings:
   base:
     MARKETING_VERSION: 1.0
     CURRENT_PROJECT_VERSION: 1
+packages:
+  Supabase:
+    url: https://github.com/supabase/supabase-swift
+    from: 2.0.0
 targets:
   FantasyMarket:
     type: application
@@ -18,22 +22,34 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mlyin.FantasyMarket
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Fantasy Market
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
         CODE_SIGN_STYLE: Automatic
     dependencies:
       - target: FantasyMarketMessages
         embed: true
   FantasyMarketMessages:
-    type: app-extension
+    type: app-extension.messages
     platform: iOS
     sources:
-      - FantasyMarketMessages
+      - path: FantasyMarketMessages
+        excludes:
+          - Info.plist
     info:
       path: FantasyMarketMessages/Info.plist
+      properties:
+        CFBundleDisplayName: Fantasy Market
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.message-payload-provider
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mlyin.FantasyMarket.MessagesExtension
+        ASSETCATALOG_COMPILER_APPICON_NAME: iMessage App Icon
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
+    dependencies:
+      - package: Supabase
+        product: Supabase
 schemes:
   FantasyMarket:
     build:
