@@ -1,76 +1,140 @@
-# Fantasy Market iMessage client
+# Fantasy Market in Messages
 
-The iOS project is generated from project.yml using XcodeGen so it can be built from a cloud Mac without checking a machine-generated .xcodeproj into source control.
+The primary client is a native SwiftUI Messages extension. Create/join a league,
+read its book, place/cancel limit orders, buy complete sets, see standings, and
+settle as commissioner without opening a browser. Supabase holds canonical state;
+message cards are snapshots and invites, never balance or order authority.
+Play money only. No deposits, withdrawals, prizes, or real-money payouts.
 
-Targets:
-- FantasyMarket: containing iOS app (landing screen that points people to Messages)
-- FantasyMarketMessages: Messages extension, the actual trading app (Swift + SwiftUI)
+## Mac setup
 
-Codemagic installs XcodeGen, generates FantasyMarket.xcodeproj, applies signing profiles, archives, and uploads to TestFlight (see codemagic.yaml at the repo root).
+Xcode requires macOS; it cannot run on Windows. Install Xcode, open it once to
+accept its license and install an iOS simulator. With Homebrew installed, run:
 
-Bundle IDs:
-- com.mlyin.FantasyMarket
-- com.mlyin.FantasyMarket.MessagesExtension
-
-## Build it locally
-
-```bash
+```sh
+git pull --ff-only
 brew install xcodegen
-cd ios && xcodegen generate && open FantasyMarket.xcodeproj
+xcodegen generate --spec ios/project.yml
+open ios/FantasyMarket.xcodeproj
 ```
 
-Xcode resolves the one package, [supabase-swift](https://github.com/supabase/supabase-swift) 2.x,
-on first open. Run the `FantasyMarket` scheme on an iPhone simulator: Xcode launches Messages
-with the extension installed. Open a conversation, tap the app drawer, pick **Fantasy Market**.
-To test the bubble round trip use the two-person conversation the simulator provides: send a
-bubble as one person, switch to the other, tap it. On a device pick a team under
-*Signing & Capabilities* for both targets.
+Select **FantasyMarket** and an iPhone simulator, then Run. This scheme launches
+the containing app, not Messages. Open **Messages** in the simulator, open a
+conversation, then **+ → More → Fantasy Market** (placement varies by iOS version).
+For an iPhone, select the same Apple development team for both targets, connect
+the phone, enable Developer Mode if requested, and Run.
 
-The extension code was written without Xcode at hand (Linux container). It parses cleanly,
-but expect a few compiler complaints on the first build, most likely in the supabase-swift
-calls in `MarketStore.swift`.
+| Target | Bundle identifier |
+| --- | --- |
+| FantasyMarket (containing app) | com.mlyin.FantasyMarket |
+| FantasyMarketMessages (extension) | com.mlyin.FantasyMarket.MessagesExtension |
 
-## How the extension works
+Minimum iOS is 17. The extension is embedded as `app-extension.messages`, with
+`APPLICATION_EXTENSION_API_ONLY=YES` and `SKIP_INSTALL=YES`. XcodeGen writes
+`com.apple.message-payload-provider` and principal class
+`FantasyMarketMessages.MessagesViewController` from `info.properties`.
 
-**Sign in.** First launch asks for a name, then signs in anonymously
-(`auth.signInAnonymously` with `display_name` metadata, which the `handle_new_user`
-trigger copies into `profiles`). The session lives in the extension's Keychain. There is
-no update policy on `profiles`, so the name is set once at sign-in.
+The generated project is ignored. Edit `project.yml` instead. Generation restores
+`ios/Package.resolved`, pinning supabase-swift 2.55.2 and the transitive revisions
+from the successful cloud build. Deliberate package upgrades must copy the new
+workspace lockfile back to `ios/Package.resolved` and rerun both builds below.
 
-**Compact drawer** (`DrawerView`): tiles for the leagues you belong to, plus *New market*
-and *Join*. Tapping any of them expands the extension.
+## Build checks
 
-**Board** (`BoardView`): the reference League Market layout. Header with equity and cash,
-a row per team with a *bid / ask* cell and the mark underneath, then your open orders,
-positions, standings and the tape. Pull to refresh; while a league is open the store also
-re-fetches the book every 8 seconds (`MarketStore.subscribe`). Supabase Realtime can
-replace the poll once a Mac build pins the SDK version.
+GitHub Actions runs XcodeGen, model/link regression checks, a simulator build, an
+unsigned Release device archive, and inspection of the actual embedded extension.
+Logs and the archive are artifacts. An unsigned archive cannot install on an
+iPhone or upload to TestFlight.
 
-**Order ticket** (`OrderTicketView`): book ladder, buy/sell, price and size steppers with
-"lift the ask / join the bid / improve" chips, a plain-English preview, and a *Post the
-result in the chat* toggle. Selling more than you hold offers to buy complete sets
-(`seed_complete_set`), which is how you go short.
+```sh
+xcodegen generate --spec ios/project.yml
+xcodebuild -project ios/FantasyMarket.xcodeproj -scheme FantasyMarket \
+  -configuration Debug -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath build/simulator CODE_SIGNING_ALLOWED=NO build
+xcodebuild -project ios/FantasyMarket.xcodeproj -scheme FantasyMarket \
+  -configuration Release -destination 'generic/platform=iOS' \
+  -archivePath build/FantasyMarket.xcarchive CODE_SIGNING_ALLOWED=NO archive
+python3 scripts/verify-ios-bundle.py build/FantasyMarket.xcarchive/Products/Applications/FantasyMarket.app
+```
 
-**Bubbles** (`MarketMessage`, `MarketCard`): every bubble carries a card rendered from the
-board (SwiftUI `ImageRenderer`) and a URL into the web app,
-`https://fantasy-market-nine.vercel.app/?source=imessage&league=…&invite=…`, the same
-query keys `MarketLink` uses, so someone without the iMessage app still gets a working
-link. Captions use Messages' `$<participant-uuid>` substitution so they read
-"Max bought 100 Karthik @ 27¢" without the app knowing anyone's name. When you tap an
-existing bubble the new one reuses its `MSSession`, so Messages moves and updates that
-bubble instead of stacking a new one, like GamePigeon's "your turn" bubble.
-`MSConversation.insert` only stages the message; the sender still taps send.
+The successful builds use Swift 5 language mode. The pinned SDK still produces
+PostgREST Sendable warnings (including with `@preconcurrency import Supabase`).
+MarketStore and Messages interaction run on the main actor. Revalidate the SDK
+before enabling Swift 6 strict mode; those warnings would become errors.
 
-**Tapping a bubble** (`RootView.handleInvite`): calls `join_league` with the code in the
-URL (idempotent) and opens that board.
+## Apple/Codemagic actions still required
 
-## Backend contract
+`fantasy-market-ios-unsigned` needs no Apple credentials. The signed workflow,
+`fantasy-market-ios`, archives and submits to TestFlight. Before running it:
 
-Tables `leagues`, `contracts`, `league_members`, `orders`, `trades`, `positions`,
-`profiles`; RPCs `create_demo_league`, `join_league`, `place_order`, `cancel_order`,
-`seed_complete_set`, `settle_league`. Money is integer cents, prices are 1–99¢, a contract
-pays 100¢. Row types in `Models.swift` use the column names verbatim. The URL and
-publishable key in `Backend.swift` are the same client-safe values as `lib/supabase.ts`.
+1. Enroll in Apple Developer; register both explicit bundle IDs above under your
+   team. Create the App Store Connect app for the containing ID.
+2. Add the App Store Connect API integration named **codemagic** in Codemagic Team
+   integrations (or change the YAML name to match your existing integration).
+3. Add an Apple Distribution certificate with its private key and App Store
+   profiles for **both IDs**, from the same team/certificate, to Codemagic Code
+   signing identities. Containing-ID matching also selects extension profiles;
+   `verify-signing.py` fails early if either profile is missing.
+4. Run the signed workflow for the tested commit. Both targets use Codemagic's
+   project build counter. Raise the counter if Apple already has a higher build.
+5. Complete Apple agreements, export-compliance answers and TestFlight tester
+   setup. External testers may need Apple's beta review.
 
-Not in the backend yet, so not in the app: 2nd and 3rd place contracts (the schema has one
-"wins the league" contract per team and `settle_league` takes a single winner).
+Keep `.p8`, `.p12`, certificates, keys and profiles in Apple/Codemagic secure
+settings, never Git or chat. No App Groups/Keychain sharing is needed: the host
+has no user session and the extension owns its Keychain session.
+
+## Messages behavior and manual acceptance
+
+The compact drawer expands into the board. The book polls while active, refreshes
+after mutations/received cards, and stops polling when inactive. The live dot
+means the latest fetch succeeded, not a server push subscription.
+
+Cards carry an HTTPS league/invite URL and rendered snapshot. Selecting one joins
+through the server RPC and fetches the board. Sharing reuses the selected card's
+MSSession only for the same league. `MSConversation.insert` stages the card; the
+person taps Send. Insertion errors do not undo already-saved market changes.
+The web companion also handles the invite URL.
+
+Anonymous identity is per installation/session: web and native may join the same
+league as different users. Cross-device recovery/linking is not implemented.
+
+Manual checks still needed on a Mac/iPhone:
+
+- Enter a name, create two teams, and send an invite into a conversation.
+- Tap the card on a second device/account; confirm the same market opens inside
+  Messages. Simulator participants may share an installation's anonymous session,
+  so use a second device for genuine two-user trading.
+- Buy sets, sell, partially fill from the other account, cancel the remainder,
+  and send a result card.
+- Collapse/reopen, switch conversations, select old cards, and test offline recovery.
+- Settle a disposable league and verify final equity equals paid cash.
+- Check small iPhones, iPad, keyboard, VoiceOver and card layout.
+
+## Backend review
+
+The live schema, RPCs and RLS were inspected. No backend interfaces/migrations
+changed. The rollback-only [integration check](../scripts/backend-contract-smoke.sql)
+passed: private access, idempotent join, reservations, maker-price partial fills,
+cancellation, commissioner authorization and settlement. All test rows rolled back.
+
+Important existing assumptions/limits:
+
+- Settlement retains historical positions after crediting cash; settled equity
+  must not include their value again. The native client accounts for this.
+- Complete sets cost 100 cents and issue one of each open contract. Selling is a
+  funded inventory sale, not an unfunded short or future payment obligation.
+- SKIP LOCKED matching is not strict global price/time priority with concurrent
+  writers. Order/settlement races need concurrency tests and a shared lock strategy.
+- The backend permits adding contracts after sets exist, and checks contract
+  status rather than league closed status during orders. The native UI creates
+  all teams initially and allows trading only in open leagues; server hardening
+  is still needed before adding those features to other clients.
+- Cost basis is not reduced on sells; it is not accurate realized P&L. The native
+  client uses holdings/cash for equity. Tape volume covers the last 60 trades.
+- Multi-request REST reads are not an atomic snapshot. Cards can be stale.
+- Network failures around non-idempotent mutations require checking orders and
+  balances before retrying. Do not automatically retry order/create/set RPCs.
+
+The sequential smoke test does not certify concurrency correctness or production
+readiness of the existing matching engine.

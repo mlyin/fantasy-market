@@ -1,13 +1,19 @@
 # Fantasy Market
 
-Mobile-first play-money prediction exchange for a private fantasy league.
+Play-money prediction exchange for a private fantasy league, primarily operated
+through a native iMessage Messages extension. Friends trade team-winner contracts
+inside the conversation and share market/trade cards.
 
 ## Stack
-Next.js + Supabase Postgres/Auth/Realtime. The matching engine runs transactionally in Postgres RPCs.
+Native Swift/SwiftUI Messages extension + Next.js/Vercel companion + Supabase
+Postgres/Auth. The matching engine runs in Postgres RPCs. XcodeGen generates the
+iOS project; Codemagic handles signed iOS builds and TestFlight.
+
+See [iOS build, Mac setup and remaining Apple actions](ios/README.md).
 
 ## Run
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
