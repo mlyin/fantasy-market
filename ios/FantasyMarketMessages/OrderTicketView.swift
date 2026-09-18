@@ -15,6 +15,7 @@ struct OrderTicketView: View {
     @State private var error: String?
     @State private var submitting = false
     @State private var postToChat = true
+    @State private var buyingSets = false
 
     init(store: MarketStore, host: ConversationHost, contract: Contract) {
         self.store = store
@@ -24,8 +25,9 @@ struct OrderTicketView: View {
     }
 
     private var quote: Quote { store.quote(for: contract) }
-    private var price: Int { min(99, max(1, Int(priceText) ?? 0)) }
-    private var quantity: Int { min(1_000_000, max(1, Int(quantityText.filter(\.isNumber)) ?? 0)) }
+    private var price: Int { Int(priceText) ?? 0 }
+    private var quantity: Int { Int(quantityText) ?? 0 }
+    private var valid: Bool { (1...99).contains(price) && (1...1_000_000).contains(quantity) }
     private var held: Int { store.position(for: contract).map { $0.quantity - $0.reserved_quantity } ?? 0 }
 
     var body: some View {
@@ -48,7 +50,7 @@ struct OrderTicketView: View {
                     .foregroundStyle(Theme.muted)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if side == .sell && quantity > held {
+                if valid && side == .sell && quantity > held {
                     shortHint
                 }
                 if let error {
@@ -63,7 +65,7 @@ struct OrderTicketView: View {
 
                 Button(submitting ? "Placing…" : (side == .buy ? "Place buy order" : "Place sell order"), action: submit)
                     .buttonStyle(PrimaryButtonStyle())
-                    .disabled(submitting)
+                    .disabled(submitting || buyingSets || !valid || store.league?.isOpen != true)
             }
             .padding(16)
         }
@@ -182,10 +184,11 @@ struct OrderTicketView: View {
     }
 
     private var preview: String {
+        guard valid else { return "Enter a price from 1–99¢ and 1–1,000,000 contracts." }
         let p = price, q = quantity, who = "\(contract.name) wins"
         return side == .buy
             ? "Costs up to \(Fmt.money(p * q)). Pays \(Fmt.money(100 * q)) if \(who), so you'd net \(Fmt.money((100 - p) * q))."
-            : "Collects \(Fmt.money(p * q)) now. If \(who) you pay \(Fmt.money(100 * q)), a net loss of \(Fmt.money((100 - p) * q)). Otherwise you keep it all."
+            : "If filled, sells \(Fmt.n(q)) contracts you own for at least \(Fmt.money(p * q)). You give up their future payout. Unfilled contracts stay reserved until you cancel."
     }
 
     private var shortHint: some View {
@@ -198,19 +201,23 @@ struct OrderTicketView: View {
                 .foregroundStyle(Theme.gold)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Buy \(Fmt.n(needed)) complete sets for \(Fmt.money(100 * needed))") {
+                guard !buyingSets else { return }
+                buyingSets = true
                 Task {
+                    defer { buyingSets = false }
                     do { try await store.buyCompleteSets(needed); store.flash("Bought \(Fmt.n(needed)) complete sets") }
                     catch { self.error = error.marketMessage }
                 }
             }
             .buttonStyle(GhostButtonStyle())
+            .disabled(buyingSets || submitting)
         }
     }
 
     // MARK: Submit
 
     private func submit() {
-        guard !submitting else { return }
+        guard !submitting, valid else { return }
         submitting = true
         error = nil
         Task {
@@ -294,7 +301,7 @@ struct CompleteSetsView: View {
     @State private var error: String?
     @State private var busy = false
 
-    private var quantity: Int { min(1_000_000, max(1, Int(quantityText.filter(\.isNumber)) ?? 0)) }
+    private var quantity: Int { min(1_000_000, max(0, Int(quantityText) ?? 0)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -323,7 +330,7 @@ struct CompleteSetsView: View {
                 }
             }
             .buttonStyle(PrimaryButtonStyle())
-            .disabled(busy)
+            .disabled(busy || quantity == 0 || Int(quantityText) != quantity || store.league?.isOpen != true)
             Spacer(minLength: 0)
         }
         .padding(16)

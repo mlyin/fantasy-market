@@ -1,5 +1,11 @@
 import Foundation
 
+enum MarketValuation {
+    static func equity(cash: Int, positionValue: Int, settled: Bool) -> Int {
+        cash + (settled ? 0 : positionValue)
+    }
+}
+
 // Row types mirror the Supabase tables column-for-column (snake_case on purpose:
 // the PostgREST decoder is not configured to convert keys).
 

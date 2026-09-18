@@ -79,7 +79,7 @@ struct BoardView: View {
                     .foregroundStyle(Theme.chalk)
                     .lineLimit(2)
                 HStack(spacing: 6) {
-                    Text("Where does each team finish? Contracts pay $1.00.")
+                    Text("Play money · winning contracts pay $1.00.")
                         .font(Theme.body(13))
                         .foregroundStyle(Theme.muted)
                     Circle().fill(store.isLive ? Theme.bid : Theme.muted).frame(width: 8, height: 8)
@@ -211,11 +211,13 @@ struct BoardView: View {
             ForEach(positions, id: \.contract_id) { position in
                 if let contract = store.contract(id: position.contract_id) {
                     let mark = store.mark(for: contract)
-                    let value = Int((Double(position.quantity) * mark).rounded())
+                    let value = store.league?.isSettled == true ? 0 : Int((Double(position.quantity) * mark).rounded())
                     ListItem {
                         Text("\(contract.name) to win")
                     } detail: {
-                        Text("long \(Fmt.n(position.quantity)), marked \(Fmt.cents(mark))")
+                        Text(store.league?.isSettled == true
+                             ? "\(Fmt.n(position.quantity)) settled at \(Fmt.cents(mark)); payout included in cash"
+                             : "long \(Fmt.n(position.quantity)), marked \(Fmt.cents(mark))")
                     } trailing: {
                         Text(Fmt.money(value)).font(Theme.display(19, weight: .semibold)).foregroundStyle(Theme.chalk)
                     }

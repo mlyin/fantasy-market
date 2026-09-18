@@ -30,6 +30,9 @@ struct RootView: View {
         .onChange(of: host.pendingInviteToken) { _, _ in handleInvite() }
         .onChange(of: store.isBootstrapped) { _, _ in handleInvite() }
         .onChange(of: store.needsName) { _, _ in handleInvite() }
+        .onChange(of: host.errorMessage) { _, message in
+            if let message { store.errorMessage = message; host.errorMessage = nil }
+        }
         .alert("Something went wrong",
                isPresented: Binding(get: { store.errorMessage != nil },
                                     set: { if !$0 { store.clearError() } })) {
@@ -41,7 +44,9 @@ struct RootView: View {
 
     @ViewBuilder
     private var content: some View {
-        if store.needsName {
+        if !store.isBootstrapped && !store.needsName {
+            ProgressView("Opening your account…")
+        } else if store.needsName {
             NameView(store: store)
         } else if !host.isExpanded {
             drawer
@@ -74,7 +79,8 @@ struct RootView: View {
                        host.expand()
                        Task {
                            do { try await store.open(leagueID: league.id) }
-                           catch { store.errorMessage = error.marketMessage }
+                           catch is CancellationError { }
+                           catch { route = .drawer; store.errorMessage = error.marketMessage }
                        }
                    },
                    onNew: { route = .newMarket; host.expand() },
@@ -90,8 +96,9 @@ struct RootView: View {
         route = .board
         host.expand()
         Task {
-            do { try await store.join(code: invite.inviteCode) }
-            catch { store.errorMessage = error.marketMessage }
+            do { try await store.join(code: invite.inviteCode, expectedLeagueID: invite.leagueID) }
+            catch is CancellationError { }
+            catch { route = .drawer; store.errorMessage = error.marketMessage }
         }
     }
 }

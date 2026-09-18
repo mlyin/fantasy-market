@@ -1,6 +1,6 @@
 import Foundation
 import Observation
-import Supabase
+@preconcurrency import Supabase
 
 /// All market state for the extension: anonymous auth, the leagues you belong to,
 /// and the live book for the league that is open. Mirrors what the reference
@@ -32,6 +32,14 @@ final class MarketStore {
     private let client = Backend.client
     private var pollTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
+    private var isActive = false
+    private var selectionToken = UUID()
+
+    func setActive(_ active: Bool) {
+        isActive = active
+        unsubscribe()
+        if active, let league { subscribe(to: league.id) }
+    }
 
     // MARK: - Session
 
@@ -53,6 +61,7 @@ final class MarketStore {
     }
 
     func signIn(displayName: String) async {
+        guard !isBusy else { return }
         let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { errorMessage = "Pick a name first."; return }
         isBusy = true
@@ -100,7 +109,7 @@ final class MarketStore {
     }
 
     @discardableResult
-    func join(code: String) async throws -> League {
+    func join(code: String, expectedLeagueID: UUID? = nil) async throws -> League {
         struct Params: Encodable { let p_invite_code: String }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard !trimmed.isEmpty else { throw MarketError.invalidInvite }
@@ -108,6 +117,9 @@ final class MarketStore {
             .rpc("join_league", params: Params(p_invite_code: trimmed))
             .execute()
             .value
+        guard expectedLeagueID == nil || membership.league_id == expectedLeagueID else {
+            throw MarketError.invalidInvite
+        }
         await loadMyLeagues()
         return try await open(leagueID: membership.league_id)
     }
@@ -115,6 +127,11 @@ final class MarketStore {
     /// Select a league, load its book and start listening for changes.
     @discardableResult
     func open(leagueID: UUID) async throws -> League {
+        let token = UUID()
+        selectionToken = token
+        unsubscribe()
+        league = nil
+        contracts = []; openOrders = []; trades = []; positions = []; members = []
         let l: League = try await client
             .from("leagues")
             .select()
@@ -122,17 +139,19 @@ final class MarketStore {
             .single()
             .execute()
             .value
+        guard selectionToken == token else { throw CancellationError() }
         league = l
         contracts = []; openOrders = []; trades = []; positions = []; members = []
         await refresh()
-        await subscribe(to: l.id)
+        if isActive { subscribe(to: l.id) }
         return l
     }
 
     func closeLeague() {
+        selectionToken = UUID()
+        unsubscribe()
         league = nil
         contracts = []; openOrders = []; trades = []; positions = []; members = []
-        Task { await unsubscribe() }
     }
 
     // MARK: - Book
@@ -153,14 +172,17 @@ final class MarketStore {
                 .eq("league_id", value: lid).execute().value
             guard league?.id == current.id else { return }   // user switched leagues mid-flight
             league = fresh; contracts = cs; openOrders = os; trades = ts; positions = ps; members = ms
+            isLive = isActive
         } catch {
+            guard league?.id == current.id, !Task.isCancelled else { return }
+            isLive = false
             errorMessage = error.marketMessage
         }
     }
 
     func placeOrder(contract: Contract, side: Side, price: Int, quantity: Int) async throws -> OrderReceipt {
         struct Params: Encodable { let p_contract: UUID; let p_side: String; let p_price: Int; let p_quantity: Int }
-        guard (1...99).contains(price), quantity > 0 else { throw MarketError.message("Price must be 1–99¢ and size at least 1.") }
+        guard (1...99).contains(price), (1...1_000_000).contains(quantity), league?.isOpen == true else { throw MarketError.message("Open market required. Price must be 1–99¢ and size 1–1,000,000.") }
         let orderID: UUID = try await client
             .rpc("place_order", params: Params(p_contract: contract.id, p_side: side.rawValue, p_price: price, p_quantity: quantity))
             .execute()
@@ -186,7 +208,7 @@ final class MarketStore {
     /// a team short (the set always pays out exactly $1.00 at settlement).
     func buyCompleteSets(_ quantity: Int) async throws {
         struct Params: Encodable { let p_league: UUID; let p_quantity: Int }
-        guard let league else { throw MarketError.message("Open a market first.") }
+        guard let league, league.isOpen, (1...1_000_000).contains(quantity) else { throw MarketError.message("Open market required. Enter 1–1,000,000 sets.") }
         _ = try await client.rpc("seed_complete_set", params: Params(p_league: league.id, p_quantity: quantity)).execute()
         await refresh()
     }
@@ -254,11 +276,13 @@ final class MarketStore {
     /// Cash plus positions at the mark, in cents.
     func equity(of userID: UUID) -> Int {
         guard let row = members.first(where: { $0.user_id == userID }) else { return 0 }
+        // settle_league credits cash but keeps historical position quantities.
+        guard league?.isSettled != true else { return MarketValuation.equity(cash: row.cash_balance, positionValue: 0, settled: true) }
         let held = positions.filter { $0.user_id == userID }.reduce(0.0) { sum, p in
             guard let c = contract(id: p.contract_id) else { return sum }
             return sum + Double(p.quantity) * mark(for: c)
         }
-        return row.cash_balance + Int(held.rounded())
+        return MarketValuation.equity(cash: row.cash_balance, positionValue: Int(held.rounded()), settled: false)
     }
 
     var myEquity: Int { userID.map(equity(of:)) ?? 0 }
@@ -277,9 +301,8 @@ final class MarketStore {
     /// Poll the book while a league is open. The extension is only on screen in short
     /// bursts, and the bubble is the real notification, so a light poll is enough.
     /// (Supabase Realtime can replace this once the SDK version is pinned by a Mac build.)
-    private func subscribe(to leagueID: UUID) async {
-        await unsubscribe()
-        isLive = true
+    private func subscribe(to leagueID: UUID) {
+        unsubscribe()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(8))
@@ -289,7 +312,7 @@ final class MarketStore {
         }
     }
 
-    private func unsubscribe() async {
+    private func unsubscribe() {
         pollTask?.cancel()
         pollTask = nil
         isLive = false

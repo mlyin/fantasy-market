@@ -15,6 +15,7 @@ final class ConversationHost {
     /// so the same invite can be handled twice.
     private(set) var pendingInvite: MarketInvite?
     private(set) var pendingInviteToken = 0
+    var errorMessage: String?
 
     var isExpanded: Bool { presentationStyle == .expanded }
 
@@ -45,10 +46,18 @@ final class ConversationHost {
     /// Put the bubble in the compose field. The person still taps send; Messages does not
     /// let an extension send on its own.
     func stage(_ message: MSMessage, collapseAfter: Bool = true, completion: ((Error?) -> Void)? = nil) {
-        guard let conversation else { completion?(MarketError.message("No conversation is open.")); return }
-        conversation.insert(message) { error in
-            Task { @MainActor in completion?(error) }
+        guard let conversation else {
+            errorMessage = "No conversation is open. Reopen Fantasy Market from Messages to share."
+            completion?(MarketError.message(errorMessage!))
+            return
         }
-        if collapseAfter { collapse() }
+        conversation.insert(message) { [weak self] error in
+            Task { @MainActor in
+                if let error {
+                    self?.errorMessage = "Could not add the card to Messages: \(error.localizedDescription). Your market changes are saved; use Share in chat to try again."
+                } else if collapseAfter { self?.collapse() }
+                completion?(error)
+            }
+        }
     }
 }

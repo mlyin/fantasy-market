@@ -9,3 +9,12 @@ xcuserdata/
 DerivedData/
 .swiftpm/
 ios/FantasyMarket.xcodeproj/
+build/
+*.tsbuildinfo
+*.p12
+*.p8
+*.pem
+*.key
+*.cer
+*.mobileprovision
+*.provisionprofile

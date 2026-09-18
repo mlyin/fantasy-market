@@ -35,6 +35,7 @@ final class MessagesViewController: MSMessagesAppViewController {
         super.willBecomeActive(with: conversation)
         host.conversation = conversation
         host.presentationStyle = presentationStyle
+        store.setActive(true)
         if let selected = conversation.selectedMessage {
             host.handle(selected: selected)
         }
@@ -43,7 +44,8 @@ final class MessagesViewController: MSMessagesAppViewController {
 
     override func didResignActive(with conversation: MSConversation) {
         super.didResignActive(with: conversation)
-        host.conversation = conversation
+        store.setActive(false)
+        host.conversation = nil
     }
 
     override func didSelect(_ message: MSMessage, conversation: MSConversation) {
