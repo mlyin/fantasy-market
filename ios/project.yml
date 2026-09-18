@@ -20,6 +20,11 @@ targets:
     platform: iOS
     sources:
       - FantasyMarket
+    info:
+      path: FantasyMarket/Info.plist
+      properties:
+        # Only HTTPS, so the App Store's export-compliance question is answered up front.
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mlyin.FantasyMarket
@@ -43,6 +48,7 @@ targets:
       path: FantasyMarketMessages/Info.plist
       properties:
         CFBundleDisplayName: Fantasy Market
+        ITSAppUsesNonExemptEncryption: false
         NSExtension:
           NSExtensionPointIdentifier: com.apple.message-payload-provider
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).MessagesViewController
