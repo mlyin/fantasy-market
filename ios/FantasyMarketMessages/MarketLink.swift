@@ -1,0 +1,2 @@
+import Foundation
+struct MarketLink { let leagueID:String?; let inviteCode:String?; func url()->URL? { var c=URLComponents(string:"https://fantasy-market-nine.vercel.app"); var q=[URLQueryItem(name:"source",value:"imessage")]; if let leagueID { q.append(URLQueryItem(name:"league",value:leagueID)) }; if let inviteCode { q.append(URLQueryItem(name:"invite",value:inviteCode)) }; c?.queryItems=q; return c?.url } }
