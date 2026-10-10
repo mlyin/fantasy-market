@@ -29,6 +29,8 @@ struct Contract: Codable, Identifiable, Hashable, Sendable {
     let ticker: String
     let status: String
     let settlement_cents: Int?
+    var manager_name: String? = nil
+    var claimed_by: UUID? = nil
 }
 
 struct Order: Codable, Identifiable, Hashable, Sendable {
@@ -116,6 +118,7 @@ enum Side: String, Codable, CaseIterable, Sendable {
 
 /// Aggregated top-of-book for one contract.
 struct Quote: Hashable, Sendable {
+    var outcomeCount: Int = 2
     var bids: [Level] = []        // best first
     var asks: [Level] = []        // best first
     var last: Int?
@@ -130,11 +133,12 @@ struct Quote: Hashable, Sendable {
     var bestBid: Int? { bids.first?.price }
     var bestAsk: Int? { asks.first?.price }
 
-    /// Mid when both sides exist, else last trade, else 50¢ (matches the reference page).
+    /// Mid when both sides exist, else last trade, else an equal share of the
+    /// $1.00 payout. An untouched complete set must be worth its $1.00 cost.
     var mark: Double {
         if let b = bestBid, let a = bestAsk { return Double(b + a) / 2 }
         if let l = last { return Double(l) }
-        return 50
+        return 100.0 / Double(max(2, outcomeCount))
     }
 }
 

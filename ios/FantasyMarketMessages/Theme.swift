@@ -62,6 +62,7 @@ enum Fmt {
 // MARK: - Reusable chrome
 
 struct PrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.display(20))
@@ -69,10 +70,12 @@ struct PrimaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 48)
             .background(Theme.chalk.opacity(configuration.isPressed ? 0.85 : 1))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 
 struct GhostButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.body(15, weight: .medium))
@@ -82,6 +85,7 @@ struct GhostButtonStyle: ButtonStyle {
             .background(Theme.turf2.opacity(configuration.isPressed ? 1 : 0))
             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(Theme.line))
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 

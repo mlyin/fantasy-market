@@ -33,11 +33,7 @@ struct OrderTicketView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Capsule().fill(Theme.line).frame(width: 40, height: 4).frame(maxWidth: .infinity)
-
-                (Text(contract.name) + Text("  to win").font(Theme.display(20, weight: .medium)).foregroundColor(Theme.muted))
-                    .font(Theme.display(28))
-                    .foregroundStyle(Theme.chalk)
+                ScreenHeader(title: "\(contract.name) to win", onClose: { dismiss() })
                 Text(subtitle)
                     .font(Theme.body(14))
                     .foregroundStyle(Theme.muted)
@@ -57,7 +53,7 @@ struct OrderTicketView: View {
                     Text(error).font(Theme.body(15)).foregroundStyle(Theme.ask)
                 }
                 Toggle(isOn: $postToChat) {
-                    Text("Post the result in the chat")
+                    Text("Add result to message draft")
                         .font(Theme.body(15))
                         .foregroundStyle(Theme.chalk)
                 }
@@ -305,9 +301,8 @@ struct CompleteSetsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Capsule().fill(Theme.line).frame(width: 40, height: 4).frame(maxWidth: .infinity)
-            Text("Complete sets").font(Theme.display(28)).foregroundStyle(Theme.chalk)
-            Text("A set is one contract on every team, so exactly one of them pays $1.00 at settlement. Buy sets for $1.00 each, then sell the teams you think are overpriced. That is how you go short.")
+            ScreenHeader(title: "Complete sets", onClose: { dismiss() })
+            Text("A set is one contract on every team, so exactly one of them pays $1.00 at settlement. Buy sets for $1.00 each, then sell the teams you think are overpriced. You can only sell contracts you own.")
                 .font(Theme.body(14)).foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)
             LabeledField(label: "Sets") {
@@ -335,7 +330,7 @@ struct CompleteSetsView: View {
         }
         .padding(16)
         .background(Theme.turf)
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.hidden)
         .presentationBackground(Theme.turf)
     }

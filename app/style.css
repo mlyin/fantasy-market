@@ -63,7 +63,8 @@ main {
 /* ---- Controls ---- */
 
 button,
-input {
+input,
+textarea {
   /* Inherit the page font; 16px inputs stop iOS Safari zooming on focus. */
   font: inherit;
 }
@@ -88,7 +89,8 @@ label {
   color: #8e98a7;
 }
 
-input {
+input,
+textarea {
   display: block;
   width: 100%;
   margin-top: 7px;
@@ -209,3 +211,6 @@ nav {
   padding: 10px;
   margin-top: 12px;
 }
+
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+textarea { resize: vertical; }

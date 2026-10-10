@@ -61,53 +61,54 @@ struct BoardView: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(Theme.chalk)
-                    .frame(width: 34, height: 34)
-                    .background(Theme.turf, in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back to your markets")
-            .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Theme.chalk)
+                        .frame(width: 34, height: 34)
+                        .background(Theme.turf, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back to your markets")
                 Text(store.league?.name ?? "League")
-                    .font(Theme.display(30))
-                    .foregroundStyle(Theme.chalk)
-                    .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text("Play money · winning contracts pay $1.00.")
-                        .font(Theme.body(13))
-                        .foregroundStyle(Theme.muted)
-                    Circle().fill(store.isLive ? Theme.bid : Theme.muted).frame(width: 8, height: 8)
-                        .accessibilityLabel(store.isLive ? "Live" : "Not live")
-                }
-                if let league = store.league {
-                    HStack(spacing: 8) {
-                        Text("Invite \(league.invite_code)")
-                            .font(Theme.display(14, weight: .semibold))
-                            .foregroundStyle(Theme.gold)
-                        Button(action: shareInvite) {
-                            Label("Share in chat", systemImage: "arrow.up.message")
-                                .font(Theme.body(13, weight: .semibold))
-                        }
-                        .buttonStyle(GhostButtonStyle())
-                    }
-                    .padding(.top, 4)
-                }
-            }
-            Spacer(minLength: 0)
-            VStack(alignment: .trailing, spacing: 1) {
-                Text(Fmt.money(store.myEquity))
                     .font(Theme.display(28))
                     .foregroundStyle(Theme.chalk)
-                Text("equity").font(Theme.body(12)).foregroundStyle(Theme.muted)
-                if let me = store.me {
-                    Text("cash \(Fmt.money(me.availableCash))")
-                        .font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(Fmt.money(store.myEquity))
+                        .font(Theme.display(26))
+                        .foregroundStyle(Theme.chalk)
+                    Text("equity").font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    if let me = store.me {
+                        Text("cash \(Fmt.money(me.availableCash))")
+                            .font(Theme.body(12)).foregroundStyle(Theme.muted)
+                    }
+                }.fixedSize(horizontal: true, vertical: false)
+            }
+            HStack(spacing: 6) {
+                Text("Play money · winning contracts pay $1.00.")
+                    .font(Theme.body(13)).foregroundStyle(Theme.muted)
+                Circle().fill(store.isLive ? Theme.bid : Theme.muted).frame(width: 8, height: 8)
+                    .accessibilityLabel(store.isLive ? "Live" : "Not live")
+            }
+            if let league = store.league {
+                HStack(spacing: 12) {
+                    Text("Invite \(league.invite_code)")
+                        .font(Theme.display(16, weight: .semibold))
+                        .foregroundStyle(Theme.gold)
+                        .lineLimit(1)
+                        .textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    Button(action: shareInvite) {
+                        Label("Share invite", systemImage: "arrow.up.message")
+                            .font(Theme.body(13, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(GhostButtonStyle())
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             }
         }
@@ -225,7 +226,7 @@ struct BoardView: View {
             }
         }
         if store.league?.isOpen == true {
-            Button("Buy complete sets to short a team") { showSets = true }
+            Button("Buy complete sets") { showSets = true }
                 .buttonStyle(GhostButtonStyle())
                 .padding(.top, 8)
         }
@@ -243,7 +244,7 @@ struct BoardView: View {
                 ListItem {
                     HStack(spacing: 0) {
                         Text("\(index + 1)").foregroundStyle(Theme.muted).frame(width: 26, alignment: .leading)
-                        Text(row.member.name).foregroundStyle(isMe ? Theme.gold : Theme.chalk)
+                        Text(store.name(of: row.member.user_id)).foregroundStyle(isMe ? Theme.gold : Theme.chalk)
                     }
                 } detail: {
                     Text("cash \(Fmt.money(row.member.cash_balance))")
@@ -283,7 +284,7 @@ struct BoardView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Commissioner").font(Theme.display(22, weight: .semibold)).foregroundStyle(Theme.chalk)
                 .padding(.top, 34)
-            Text("When the season is over, pick the winner. Winning contracts pay $1.00, the rest pay $0, every order is cancelled, and a results bubble goes to the chat.")
+            Text("When the season is over, pick the winner. Winning contracts pay $1.00, the rest pay $0, every order is cancelled, and a results card is added to your message draft.")
                 .font(Theme.body(13)).foregroundStyle(Theme.muted)
             Button(settling ? "Settling…" : "Settle market") { showSettle = true }
                 .buttonStyle(GhostButtonStyle())

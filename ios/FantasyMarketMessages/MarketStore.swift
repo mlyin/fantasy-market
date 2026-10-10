@@ -10,8 +10,8 @@ import Observation
 final class MarketStore {
     // MARK: Auth
     private(set) var userID: UUID?
-    /// True on first launch until the trader picks a display name (it is stored in
-    /// the anonymous user's metadata, which the `handle_new_user` trigger copies to profiles).
+    /// True until the user continues into a device session. Roster identity is
+    /// selected separately for each league; legacy profiles remain compatible.
     private(set) var needsName = false
     private(set) var isBootstrapped = false
 
@@ -24,6 +24,7 @@ final class MarketStore {
     private(set) var positions: [Position] = []   // everyone's, for standings
     private(set) var members: [MemberRow] = []
     private(set) var isLive = false          // polling while a league is open
+    private(set) var isBoardLoaded = false
 
     var isBusy = false
     var errorMessage: String?
@@ -34,6 +35,7 @@ final class MarketStore {
     private var toastTask: Task<Void, Never>?
     private var isActive = false
     private var selectionToken = UUID()
+    private var refreshToken = UUID()
 
     func setActive(_ active: Bool) {
         isActive = active
@@ -109,6 +111,26 @@ final class MarketStore {
     }
 
     @discardableResult
+    func createRosterLeague(name: String, roster: [RosterEntry]) async throws -> League {
+        struct Team: Encodable { let team: String; let manager: String }
+        struct Params: Encodable { let p_name: String; let p_roster: [Team] }
+        guard (2...32).contains(roster.count), roster.allSatisfy(\.isComplete) else {
+            throw MarketError.message("Add 2–32 teams, each with a manager name.")
+        }
+        let rows = roster.map { Team(team: $0.team.trimmingCharacters(in: .whitespacesAndNewlines),
+                                     manager: $0.manager.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        let result: CreateLeagueResult = try await client.rpc("create_roster_league", params: Params(p_name: name, p_roster: rows)).execute().value
+        await loadMyLeagues()
+        return try await open(leagueID: result.league_id)
+    }
+
+    func claimTeam(_ contract: Contract) async throws {
+        struct Params: Encodable { let p_contract: UUID }
+        _ = try await client.rpc("claim_roster_team", params: Params(p_contract: contract.id)).execute()
+        await refresh()
+    }
+
+    @discardableResult
     func join(code: String, expectedLeagueID: UUID? = nil) async throws -> League {
         struct Params: Encodable { let p_invite_code: String }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
@@ -131,6 +153,7 @@ final class MarketStore {
         selectionToken = token
         unsubscribe()
         league = nil
+        isBoardLoaded = false
         contracts = []; openOrders = []; trades = []; positions = []; members = []
         let l: League = try await client
             .from("leagues")
@@ -151,13 +174,17 @@ final class MarketStore {
         selectionToken = UUID()
         unsubscribe()
         league = nil
+        isBoardLoaded = false
         contracts = []; openOrders = []; trades = []; positions = []; members = []
     }
 
     // MARK: - Book
 
-    func refresh() async {
+    func refresh(reportErrors: Bool = true) async {
         guard let current = league else { return }
+        let selection = selectionToken
+        let request = UUID()
+        refreshToken = request
         let lid = current.id.uuidString
         do {
             let fresh: League = try await client.from("leagues").select().eq("id", value: lid).single().execute().value
@@ -170,13 +197,16 @@ final class MarketStore {
             let ms: [MemberRow] = try await client.from("league_members")
                 .select("user_id, cash_balance, reserved_cash, profiles(display_name)")
                 .eq("league_id", value: lid).execute().value
-            guard league?.id == current.id else { return }   // user switched leagues mid-flight
-            league = fresh; contracts = cs; openOrders = os; trades = ts; positions = ps; members = ms
+            guard selectionToken == selection, refreshToken == request, !Task.isCancelled else { return }
+            league = fresh
+            contracts = cs.sorted { $0.ticker.localizedStandardCompare($1.ticker) == .orderedAscending }
+            openOrders = os; trades = ts; positions = ps; members = ms
+            isBoardLoaded = true
             isLive = isActive
         } catch {
-            guard league?.id == current.id, !Task.isCancelled else { return }
+            guard selectionToken == selection, refreshToken == request, !Task.isCancelled else { return }
             isLive = false
-            errorMessage = error.marketMessage
+            if reportErrors { errorMessage = error.marketMessage }
         }
     }
 
@@ -226,13 +256,17 @@ final class MarketStore {
 
     var isCommissioner: Bool { league.map { $0.commissioner_id == userID } ?? false }
 
+    var rosterTeams: [Contract] { contracts.filter { $0.manager_name != nil } }
+    var myTeam: Contract? { rosterTeams.first { $0.claimed_by == userID } }
+    var needsRosterClaim: Bool { !rosterTeams.isEmpty && myTeam == nil }
+
     var me: Membership? {
         guard let league, let uid = userID, let row = members.first(where: { $0.user_id == uid }) else { return nil }
         return Membership(league_id: league.id, user_id: uid, cash_balance: row.cash_balance, reserved_cash: row.reserved_cash)
     }
 
     var myName: String {
-        members.first(where: { $0.user_id == userID })?.name ?? "You"
+        userID.map { name(of: $0) } ?? "You"
     }
 
     var myPositions: [Position] { positions.filter { $0.user_id == userID && $0.quantity != 0 } }
@@ -240,7 +274,7 @@ final class MarketStore {
     var myOpenOrders: [Order] { openOrders.filter { $0.user_id == userID } }
 
     func quote(for contract: Contract) -> Quote {
-        var q = Quote()
+        var q = Quote(outcomeCount: contracts.count)
         let book = openOrders.filter { $0.contract_id == contract.id && $0.remaining > 0 }
         func levels(_ side: String, bestIsHigh: Bool) -> [Quote.Level] {
             Dictionary(grouping: book.filter { $0.side == side }, by: { $0.price_cents })
@@ -293,7 +327,10 @@ final class MarketStore {
     }
 
     func name(of userID: UUID) -> String {
-        members.first(where: { $0.user_id == userID })?.name ?? "Trader"
+        if let team = rosterTeams.first(where: { $0.claimed_by == userID }) {
+            return team.manager_name ?? team.name
+        }
+        return rosterTeams.isEmpty ? (members.first(where: { $0.user_id == userID })?.name ?? "Trader") : "Choosing a team"
     }
 
     // MARK: - Live updates
@@ -307,7 +344,7 @@ final class MarketStore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(8))
                 guard !Task.isCancelled, let self, self.league?.id == leagueID else { return }
-                await self.refresh()
+                await self.refresh(reportErrors: false)
             }
         }
     }

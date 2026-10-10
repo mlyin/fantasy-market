@@ -55,10 +55,15 @@ struct RootView: View {
             case .drawer:
                 drawer
             case .board:
-                BoardView(store: store, host: host) {
-                    store.closeLeague()
-                    route = .drawer
-                    host.collapse()
+                if !store.isBoardLoaded {
+                    VStack(spacing: 16) {
+                        ProgressView("Opening market…")
+                        Button("Back to markets", action: closeBoard)
+                    }
+                } else if store.needsRosterClaim {
+                    ClaimTeamView(store: store, onClose: closeBoard)
+                } else {
+                    BoardView(store: store, host: host, onBack: closeBoard)
                 }
             case .newMarket:
                 NewMarketView(store: store, host: host,
@@ -70,6 +75,12 @@ struct RootView: View {
                                onCancel: { route = .drawer; host.collapse() })
             }
         }
+    }
+
+    private func closeBoard() {
+        store.closeLeague()
+        route = .drawer
+        host.collapse()
     }
 
     private var drawer: some View {

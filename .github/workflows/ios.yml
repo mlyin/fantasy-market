@@ -25,6 +25,8 @@ jobs:
           mkdir -p build
           swiftc ios/FantasyMarketMessages/Models.swift ios/FantasyMarketMessages/MarketInvite.swift scripts/test-market-models.swift -o build/market-model-tests
           build/market-model-tests
+          swiftc ios/FantasyMarketMessages/RosterImport.swift scripts/test-roster-import.swift -o build/roster-import-tests
+          build/roster-import-tests
       - name: Build simulator and device archive without signing
         run: |
           set -o pipefail

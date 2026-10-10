@@ -14,6 +14,14 @@ struct MarketModelTests {
         precondition(MarketValuation.equity(cash: 999_880, positionValue: 120, settled: false) == 1_000_000)
         var quote = Quote()
         precondition(quote.mark == 50)
+        for teams in [2, 3, 10, 32] {
+            let starting = Quote(outcomeCount: teams)
+            let completeSetValue = Double(teams) * starting.mark
+            precondition(abs(completeSetValue - 100) < 0.000001)
+            let holdings = Int((100 * completeSetValue).rounded())
+            precondition(MarketValuation.equity(cash: 990_000, positionValue: holdings, settled: false) == 1_000_000)
+        }
+        precondition(Quote(outcomeCount: 10).mark == 10)
         quote.last = 37
         precondition(quote.mark == 37)
         quote.bids = [.init(price: 40, quantity: 2, mine: false)]
