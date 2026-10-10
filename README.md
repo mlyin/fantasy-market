@@ -29,3 +29,10 @@ The checked-in Supabase URL and publishable key are intentionally client-safe. N
 - settlement RPC
 
 Play money only; no deposits, withdrawals, or real-money payouts.
+
+## Backend concurrency checks
+
+See [the disposable-local concurrency suite and locking proposal](docs/backend-concurrency.md).
+The harness exercises real RPCs across independent sessions; the backend schema
+and RPC definitions must be restored locally first. Compilation and harness guard
+checks alone do not establish matching-engine correctness.
