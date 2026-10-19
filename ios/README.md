@@ -109,7 +109,7 @@ league as different users. Cross-device recovery/linking is not implemented. The
 
 Manual checks still needed on a Mac/iPhone:
 
-- Tap Continue, import a standings screenshot, review every team/manager pair, and open a market.
+- Tap Continue, enter team and manager names, review every pair, and open a market.
 - Choose your own team, then stage an invite into a conversation. New roster leagues require a team claim before trading.
 - Tap the card on a second device/account; confirm the same market opens inside
   Messages. Simulator participants may share an installation's anonymous session,
@@ -155,21 +155,13 @@ is an opt-in live test requiring `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`; 
 creates disposable accounts/leagues and prints exact IDs for administrator cleanup.
 Do not run it unattended against a backend without authorization.
 
-## Screenshot roster and identity
+## Manual roster and identity
 
-In Messages, choose **New market → Import standings screenshot**. Apple's Vision OCR reads the selected image locally; the screenshot is never uploaded. The importer currently recognizes standings layouts with a record column and a team/manager pair on each row, including ESPN. Other layouts can be entered manually. Review all rows and the team count before opening. Truncated team names are flagged and stay editable; hidden text is never guessed.
+In Messages, choose **New market → Add team**. Enter each team and manager name, review the roster, and confirm the names and team count before opening the market. Screenshot selection and OCR import are not included in this release.
 
 Each participant joins through the invite, then picks their manager/team. A team can be claimed once and each account can claim one team per league. Claims are idempotent and persist across reopening. The database blocks orders and complete sets until a claim is made. Claims are self-selected, not verified against ESPN accounts. Changing a claim or recovering it after reinstall is not implemented. Web and native still have separate anonymous sessions: choose one client per person for now.
 
-The companion web client supports typed rosters and team selection; screenshot import is native only. Website source changes require deployment separately.
-
-Regression checks:
-
-```sh
-swiftc ios/FantasyMarketMessages/RosterImport.swift scripts/test-roster-import.swift -o build/roster-import-tests
-build/roster-import-tests
-# Optional: pass an ESPN screenshot containing 10 teams and 3 truncated names.
-```
+The companion web client also supports typed rosters and team selection. Website source changes require deployment separately.
 
 Run `scripts/backend-roster-smoke.sql` through an administrator database connection. It exercises validation, private visibility, duplicate and cross-member claims, trade gating, matching and settlement inside a rolled-back transaction. The existing `backend-contract-smoke.sql` covers backward compatibility.
 
