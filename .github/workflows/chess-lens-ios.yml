@@ -1,0 +1,83 @@
+name: Chess Lens iOS build
+on:
+  push:
+    branches: [main, 'claude/**']
+    # Web-only changes are covered by the Node tests; only native changes need a macOS build.
+    paths:
+      - 'chess-lens/ios/**'
+      - '.github/workflows/chess-lens-ios.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chess-lens-ios-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    # The Meta Wearables SDK ships binary frameworks built with Swift 6.3, so it needs
+    # Xcode 26.4 or newer; macos-26 is the hosted image that carries the Xcode 26 line.
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select the newest stable Xcode
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -viE 'beta|_rc|release_candidate' | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE/Contents/Developer"
+          xcodebuild -version
+          swift --version
+          VERSION=$(xcodebuild -version | awk '/^Xcode/ {print $2}')
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          MINOR=${MINOR:-0}
+          if [ "$MAJOR" -lt 26 ] || { [ "$MAJOR" -eq 26 ] && [ "$MINOR" -lt 4 ]; }; then
+            echo "::error::Xcode $VERSION is too old for meta-wearables-dat-ios 1.0.1 (needs 26.4+)."
+            exit 1
+          fi
+      - name: Generate project
+        run: |
+          set -euo pipefail
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          if [ ! -f chess-lens/web/index.html ]; then
+            echo "::warning::chess-lens/web/index.html is missing; the app will build but open on a 404 page."
+          fi
+          xcodegen generate --spec chess-lens/ios/project.yml
+          xcodebuild -list -project chess-lens/ios/ChessLens.xcodeproj
+      - name: Build for the simulator without signing
+        run: |
+          set -o pipefail
+          xcodebuild -project chess-lens/ios/ChessLens.xcodeproj -scheme ChessLens \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/chess-lens/simulator \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO \
+            build | tee chess-lens-simulator.log
+      - name: Archive for device without signing
+        run: |
+          set -o pipefail
+          xcodebuild -project chess-lens/ios/ChessLens.xcodeproj -scheme ChessLens \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath build/chess-lens/device \
+            -archivePath build/chess-lens/ChessLens.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            archive | tee chess-lens-archive.log
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          APP=build/chess-lens/ChessLens.xcarchive/Products/Applications/ChessLens.app
+          test -d "$APP/web"
+          ls "$APP/web"
+          ls "$APP/Frameworks" || true
+          test "$(/usr/libexec/PlistBuddy -c 'Print :MWDAT:AppLinkURLScheme' "$APP/Info.plist")" = "chesslens-app://"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist")" = "chesslens-app"
+          /usr/libexec/PlistBuddy -c 'Print :UISupportedExternalAccessoryProtocols' "$APP/Info.plist"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chess-lens-ios-build-evidence
+          path: |
+            chess-lens-*.log
+            chess-lens/ios/ChessLens.xcodeproj
+          retention-days: 7

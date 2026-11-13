@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#101214" />
+    <title>Chess Lens</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <h1>Chess Lens</h1>
+      <button id="open-saved" class="quiet" type="button">Saved<span id="saved-count"></span></button>
+    </header>
+
+    <main>
+      <!-- Capture -->
+      <section id="view-capture" class="view">
+        <div class="finder" id="finder">
+          <video id="video" playsinline muted hidden></video>
+          <img id="glasses-frame" alt="Live view from the glasses" hidden />
+          <div class="finder-empty" id="finder-empty">
+            <p id="finder-message">Point at a chess diagram in a book or on a screen.</p>
+            <button id="start-camera" class="secondary" type="button">Use phone camera</button>
+          </div>
+          <div class="finder-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+          <p class="finder-source" id="finder-source" hidden></p>
+        </div>
+
+        <p class="notice" id="capture-notice" role="status" hidden></p>
+
+        <div class="shutter-row">
+          <label class="secondary file-button">
+            Choose photo
+            <input id="file" type="file" accept="image/*" hidden />
+          </label>
+          <button id="scan" class="shutter" type="button" aria-label="Scan"><span></span></button>
+          <button id="try-sample" class="secondary" type="button">Try sample</button>
+        </div>
+
+        <section class="card" id="glasses-card" hidden>
+          <div class="card-head">
+            <h2>Glasses</h2>
+            <span class="chip" id="glasses-chip">Not connected</span>
+          </div>
+          <p class="muted" id="glasses-detail">Connect to scan what you are looking at and see the board in the lens.</p>
+          <p class="notice error" id="glasses-error" hidden></p>
+          <div class="row">
+            <button id="glasses-connect" class="primary" type="button">Connect glasses</button>
+            <button id="lens-preview" class="secondary" type="button" hidden>Show lens preview</button>
+          </div>
+          <label class="switch">
+            <input id="mock-toggle" type="checkbox" />
+            <span>Simulated glasses (no hardware needed)</span>
+          </label>
+        </section>
+
+        <p class="muted small">
+          Reads printed and on-screen diagrams. Everything runs on this device; photos are not uploaded.
+        </p>
+      </section>
+
+      <!-- Result -->
+      <section id="view-result" class="view" hidden>
+        <p class="notice" id="result-notice" role="status" hidden></p>
+        <div class="board-wrap">
+          <div class="board" id="board" role="grid" aria-label="Scanned position"></div>
+        </div>
+
+        <div class="palette" id="palette" hidden>
+          <p class="muted small" id="palette-label">Pick what is on this square</p>
+          <div class="palette-grid" id="palette-grid"></div>
+        </div>
+
+        <div class="row wrap">
+          <div class="segmented" role="group" aria-label="Side to move">
+            <button id="turn-w" type="button" aria-pressed="true">White to move</button>
+            <button id="turn-b" type="button" aria-pressed="false">Black to move</button>
+          </div>
+          <button id="flip" class="secondary" type="button" title="The diagram is drawn from the other side">Swap sides</button>
+          <button id="rotate" class="secondary" type="button" title="Turn the board a quarter turn">Rotate</button>
+        </div>
+
+        <div class="fen-row">
+          <input id="fen" type="text" readonly aria-label="FEN" />
+          <button id="copy-fen" class="secondary" type="button">Copy</button>
+        </div>
+
+        <div class="row wrap">
+          <a id="lichess" class="primary" target="_blank" rel="noopener">Analyse on Lichess</a>
+          <button id="save" class="secondary" type="button">Save</button>
+          <button id="scan-again" class="secondary" type="button">Scan another</button>
+        </div>
+
+        <details id="source-details">
+          <summary>Photo it was read from</summary>
+          <canvas id="source-canvas"></canvas>
+        </details>
+      </section>
+
+      <!-- Saved -->
+      <section id="view-saved" class="view" hidden>
+        <div class="row between">
+          <h2>Saved positions</h2>
+          <button id="close-saved" class="secondary" type="button">Back</button>
+        </div>
+        <p class="muted" id="saved-empty" hidden>Nothing saved yet. Scan a position and tap Save.</p>
+        <ul class="saved-list" id="saved-list"></ul>
+      </section>
+    </main>
+
+    <div class="busy" id="busy" hidden><div class="spinner"></div><p id="busy-text">Scanning…</p></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

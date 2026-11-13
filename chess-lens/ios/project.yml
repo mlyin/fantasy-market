@@ -1,0 +1,62 @@
+name: ChessLens
+options:
+  bundleIdPrefix: com.mlyin
+  deploymentTarget:
+    iOS: "17.2"
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: 1
+    # Swift 5 language mode, as Meta's BirdSpotter sample (camera + display + mock
+    # in one session) uses. The SDK itself needs the Swift 6.3 toolchain (Xcode 26.4+).
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    # Empty = Meta AI Developer Mode (no attestation). For a release channel, set these
+    # from the Wearables Developer Center, e.g. `xcodebuild META_APP_ID=... CLIENT_TOKEN=...`.
+    META_APP_ID: ""
+    CLIENT_TOKEN: ""
+packages:
+  MetaWearablesDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    exactVersion: 1.0.1
+targets:
+  ChessLens:
+    type: application
+    platform: iOS
+    sources:
+      - path: ChessLens
+        excludes:
+          - Info.plist
+          - ChessLens.entitlements
+      # The shared web core, bundled as a folder reference so paths survive
+      # (Bundle.main/web/index.html, web/core/..., web/model/...).
+      - path: ../web
+        name: web
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mlyin.ChessLens
+        PRODUCT_NAME: ChessLens
+        INFOPLIST_FILE: ChessLens/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: ChessLens/ChessLens.entitlements
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
+      - package: MetaWearablesDAT
+        product: MWDATDisplay
+      - package: MetaWearablesDAT
+        product: MWDATMockDevice
+schemes:
+  ChessLens:
+    build:
+      targets:
+        ChessLens: all
+    run:
+      config: Debug
+    archive:
+      config: Release

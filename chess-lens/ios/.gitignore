@@ -1,0 +1,4 @@
+ChessLens.xcodeproj/
+build/
+DerivedData/
+*.log
