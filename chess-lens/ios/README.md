@@ -7,8 +7,9 @@ the recognition; this app only moves pixels and drives the glasses:
 - connects to Meta glasses through the Meta Wearables Device Access Toolkit (DAT) 1.0.1
 - hands glasses photos to the web app, and shows the recognised board on Meta Ray-Ban Display
 
-Nothing here has been run on a device or the simulator yet. The GitHub Actions workflow
-`chess-lens-ios.yml` is the compile check; treat the first run on real glasses as a test.
+It compiles: the GitHub Actions workflow `chess-lens-ios.yml` builds it for the simulator and
+archives it for a device, unsigned, against the real SDK. It has not been launched on a
+simulator, an iPhone or real glasses yet, so treat the first run as a test.
 
 ## Build
 
@@ -35,6 +36,21 @@ xcodebuild -project chess-lens/ios/ChessLens.xcodeproj -scheme ChessLens \
   -configuration Release -destination 'generic/platform=iOS' \
   -archivePath build/chess-lens/ChessLens.xcarchive CODE_SIGNING_ALLOWED=NO archive
 ```
+
+### Without a Mac: Codemagic to TestFlight
+
+`codemagic.yaml` has a `chess-lens-ios` workflow that signs the app and submits it to
+TestFlight, the same way the Fantasy Market app ships. It has not been run. Before the first
+run:
+
+1. Register the bundle ID `com.mlyin.ChessLens` in your Apple Developer account and create an
+   App Store Connect app for it.
+2. Add its App Store provisioning profile (same distribution certificate as before) to Codemagic
+   Code signing identities.
+3. Start the **Chess Lens (TestFlight)** workflow on this branch.
+
+The app declares Meta's external-accessory protocol, as Meta's SDK requires. Whether App Store
+Connect asks anything extra about that for a TestFlight build has not been checked.
 
 ## Try it without glasses
 

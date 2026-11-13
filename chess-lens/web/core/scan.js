@@ -13,19 +13,20 @@ export const REASONS = {
 /**
  * @param {object} model from loadModel
  * @param {{data: Uint8ClampedArray|Uint8Array, width: number, height: number}} image RGBA pixels
+ * @param {{materialPrior?: boolean}} [options] passed to decode()
  * @returns {{ok: false, reason: string, message: string} | {
  *   ok: true, cells: string[], confidence: number[], fen: string, flipped: boolean,
  *   quarterTurn: boolean, quad: number[][], problems: string[], unsure: number[], ms: number}}
  *   `cells` is row-major from a8 after orientation; `flipped` says the diagram was drawn from
  *   Black's side; `unsure` lists square indexes worth a second look.
  */
-export function scan(model, image) {
+export function scan(model, image, options = {}) {
   const t0 = performance.now();
   const board = detectBoard(image);
   if (!board.ok) return { ok: false, reason: board.reason, message: REASONS[board.reason] };
   const { crops } = rectify(board.gray, board.homography, { quarterTurn: board.quarterTurn });
   const probs = classify(model, crops);
-  let { cells, confidence } = decode(probs);
+  let { cells, confidence } = decode(probs, options);
   const flipped = looksFlipped(cells);
   if (flipped) {
     cells = rotate180(cells);

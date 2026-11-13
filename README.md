@@ -29,3 +29,8 @@ The checked-in Supabase URL and publishable key are intentionally client-safe. N
 - settlement RPC
 
 Play money only; no deposits, withdrawals, or real-money payouts.
+
+## Also in this repository
+
+[`chess-lens/`](chess-lens/README.md) is a separate project: scan a chess diagram with Meta glasses
+or a phone camera. It shares nothing with Fantasy Market except the repository and the CI setup.

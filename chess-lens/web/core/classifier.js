@@ -27,6 +27,8 @@ function conv3(input, inC, size, w, b) {
   const outC = w.shape[0];
   const plane = size * size;
   const out = new Float32Array(outC * plane);
+  const wd = w.data;
+  const last = size - 1;
   for (let oc = 0; oc < outC; oc++) {
     const o = oc * plane;
     out.fill(b.data[oc], o, o + plane);
@@ -34,18 +36,20 @@ function conv3(input, inC, size, w, b) {
       const i = ic * plane;
       const wBase = (oc * inC + ic) * 9;
       for (let ky = 0; ky < 3; ky++) {
+        const w0 = wd[wBase + ky * 3];
+        const w1 = wd[wBase + ky * 3 + 1];
+        const w2 = wd[wBase + ky * 3 + 2];
         const yStart = ky === 0 ? 1 : 0;
-        const yEnd = ky === 2 ? size - 1 : size;
-        for (let kx = 0; kx < 3; kx++) {
-          const wv = w.data[wBase + ky * 3 + kx];
-          if (wv === 0) continue;
-          const xStart = kx === 0 ? 1 : 0;
-          const xEnd = kx === 2 ? size - 1 : size;
-          const shift = (ky - 1) * size + (kx - 1);
-          for (let y = yStart; y < yEnd; y++) {
-            const row = y * size;
-            for (let x = xStart; x < xEnd; x++) out[o + row + x] += wv * input[i + row + x + shift];
+        const yEnd = ky === 2 ? last : size;
+        for (let y = yStart; y < yEnd; y++) {
+          const dst = o + y * size;
+          const src = i + (y + ky - 1) * size;
+          // Edge columns have a neighbour missing; the interior takes all three taps at once.
+          out[dst] += w1 * input[src] + w2 * input[src + 1];
+          for (let x = 1; x < last; x++) {
+            out[dst + x] += w0 * input[src + x - 1] + w1 * input[src + x] + w2 * input[src + x + 1];
           }
+          out[dst + last] += w0 * input[src + last - 1] + w1 * input[src + last];
         }
       }
     }

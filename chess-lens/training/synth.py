@@ -24,7 +24,10 @@ SQ = 64  # square size of the flat render
 # Unusable for recognition: both colours share a glyph, or the glyphs are not chess figurines.
 EXCLUDED_SETS = {"disguised", "shapes", "kiwen-suwi"}
 # Sets that look like printed book figurines.
-PRINT_SETS = ["alpha", "merida", "leipzig", "companion", "chess7", "cburnett", "mpchess", "kosal", "pirouetti"]
+PRINT_SETS = [
+    "alpha", "merida", "leipzig", "companion", "chess7", "cburnett", "mpchess", "kosal", "pirouetti",
+    "py-merida_new", "py-regular", "py-chessicons", "font-freeserif-outline", "font-dejavusans-outline",
+]
 
 THEMES = [
     ((240, 217, 181), (181, 136, 99)),  # lichess brown
@@ -69,8 +72,11 @@ def load_sets(piece_dir, only=None, exclude=()):
     return sets
 
 
-def random_placement(rng):
-    kind = rng.random()
+def random_placement(rng, realistic=False):
+    """Random piece layout. `realistic` keeps to material a real game can have (at most the
+    starting army a side); otherwise 40% of layouts draw pieces uniformly so that every class is
+    well represented for training."""
+    kind = rng.random() * (0.6 if realistic else 1.0)
     if kind < 0.45:
         # Shuffled real material: thin out the starting army and scatter it.
         start = "rnbqkbnrpppppppp" + "." * 32 + "PPPPPPPPRNBQKBNR"
@@ -273,10 +279,14 @@ def scatter_text(rng, canvas, ink, box=None):
             y += line
 
 
-def compose(rng, board_img, margin, printed):
-    """Put the board on a page or screen. Returns (canvas, board corners in canvas px)."""
+def compose(rng, board_img, margin, printed, second=None, canvas_size=None, board_frac=None):
+    """Put the board on a page or screen. Returns (canvas, board corners in canvas px).
+
+    `second` is an optional (image, margin) for another diagram on the same page; its corners are
+    then returned as a third value (None when it did not fit).
+    """
     shapes = [(960, 1280), (1280, 960), (1280, 720), (720, 1280), (1000, 1000)]
-    w, h = shapes[rng.integers(0, len(shapes))]
+    w, h = canvas_size or shapes[rng.integers(0, len(shapes))]
     dark_ui = (not printed) and rng.random() < 0.4
     bg = rng.uniform(18, 60) if dark_ui else rng.uniform(205, 255)
     canvas = np.empty((h, w, 3), np.uint8)
@@ -295,19 +305,45 @@ def compose(rng, board_img, margin, printed):
 
     canvas = canvas.astype(np.float32)
     span = min(w, h)
-    side = int(rng.uniform(0.28, 0.9) * span)
+    lo, hi = board_frac or (0.28, 0.45 if second else 0.9)
+    side = int(rng.uniform(lo, hi) * span)
     board = cv2.resize(board_img, (side, side), interpolation=cv2.INTER_AREA)
     x = int(rng.integers(0, w - side + 1))
     y = int(rng.integers(0, h - side + 1))
     canvas[y : y + side, x : x + side] = board
-    m = margin * side / board_img.shape[0]
-    quad = np.array([[x + m, y + m], [x + side - m, y + m], [x + side - m, y + side - m], [x + m, y + side - m]], np.float32)
-    # Pixel centres sit at integer coordinates; the board edge falls half a pixel before them.
-    return canvas, quad - 0.5
+
+    def outline(x, y, side, margin, source):
+        m = margin * side / source.shape[0]
+        q = np.array([[x + m, y + m], [x + side - m, y + m], [x + side - m, y + side - m], [x + m, y + side - m]], np.float32)
+        # Pixel centres sit at integer coordinates; the board edge falls half a pixel before them.
+        return q - 0.5
+
+    quad = outline(x, y, side, margin, board_img)
+    if second is None:
+        return canvas, quad
+    other_img, other_margin = second
+    other_quad = None
+    for _ in range(40):
+        side2 = int(side * rng.uniform(0.8, 1.1))
+        if side2 > min(w, h):
+            continue
+        x2 = int(rng.integers(0, w - side2 + 1))
+        y2 = int(rng.integers(0, h - side2 + 1))
+        gap = 16
+        if x2 < x + side + gap and x < x2 + side2 + gap and y2 < y + side + gap and y < y2 + side2 + gap:
+            continue
+        canvas[y2 : y2 + side2, x2 : x2 + side2] = cv2.resize(other_img, (side2, side2), interpolation=cv2.INTER_AREA)
+        other_quad = outline(x2, y2, side2, other_margin, other_img)
+        break
+    return canvas, quad, other_quad
 
 
-def photograph(rng, canvas, quad, flat):
+def photograph(rng, canvas, quad, flat, also=None):
+    """Simulate the camera. Returns (image, quad); with `also` (another outline on the canvas) a
+    third value is that outline in the photo."""
     h, w = canvas.shape[:2]
+    if also is not None:
+        flat = False
     if flat:
         # Screenshot: crop near the board, no perspective.
         pad = rng.uniform(0.0, 0.6) * (quad[1, 0] - quad[0, 0])
@@ -347,7 +383,7 @@ def photograph(rng, canvas, quad, flat):
             if edge > 150:
                 break
     else:
-        return None, None
+        return (None, None, None) if also is not None else (None, None)
     # warpPerspective maps pixel centres at integers; shift so M acts on continuous coordinates.
     T = np.array([[1, 0, 0.5], [0, 1, 0.5], [0, 0, 1]], np.float64)
     Ti = np.array([[1, 0, -0.5], [0, 1, -0.5], [0, 0, 1]], np.float64)
@@ -384,13 +420,44 @@ def photograph(rng, canvas, quad, flat):
     img = 255.0 * np.power(np.clip(img, 0, 255) / 255.0, gamma)
     ok, enc = cv2.imencode(".jpg", np.clip(img, 0, 255).astype(np.uint8), [cv2.IMWRITE_JPEG_QUALITY, int(rng.integers(35, 96))])
     img = cv2.imdecode(enc, cv2.IMREAD_COLOR).astype(np.float32)
+    if also is not None:
+        q2 = cv2.perspectiveTransform(also[None].astype(np.float64) + 0.5, M)[0] - 0.5
+        return img, q.astype(np.float32), q2.astype(np.float32)
     return img, q.astype(np.float32)
 
 
-def make_scene(rng, sets, names):
+def make_scene(rng, sets, names, two=False, wide=False, realistic=False):
     set_name = names[rng.integers(0, len(names))]
-    placement = random_placement(rng)
+    placement = random_placement(rng, realistic)
     board, margin, printed = render_board(rng, sets, set_name, placement)
+    if two:
+        # Two diagrams on one page, as chess books often have. The label is the one nearer the
+        # middle of the photo: that is the one the reader is looking at.
+        placement2 = random_placement(rng, realistic)
+        board2, margin2, _ = render_board(rng, sets, set_name, placement2)
+        canvas, quad, quad2 = compose(rng, board, margin, printed, second=(board2, margin2))
+        if quad2 is None:
+            return None
+        img, quad, quad2 = photograph(rng, canvas, quad, False, also=quad2)
+        if img is None:
+            return None
+        h, w = img.shape[:2]
+        inside = quad2[:, 0].min() > 3 and quad2[:, 1].min() > 3 and quad2[:, 0].max() < w - 4 and quad2[:, 1].max() < h - 4
+        centre = np.array([w / 2, h / 2])
+        d1 = np.linalg.norm(quad.mean(axis=0) - centre)
+        d2 = np.linalg.norm(quad2.mean(axis=0) - centre)
+        if not inside or abs(d1 - d2) < 0.08 * min(w, h):
+            return None  # second diagram cut off, or no clear "nearer" one
+        if d2 < d1:
+            quad, placement = quad2, placement2
+        return img, quad, placement, {"set": set_name, "printed": bool(printed), "flat": False, "boards": 2}
+    if wide:
+        # Wide-angle glasses camera: a big frame in which the diagram is small.
+        canvas, quad = compose(rng, board, margin, printed, canvas_size=(2268, 3024), board_frac=(0.1, 0.22))
+        img, quad = photograph(rng, canvas, quad, False)
+        if img is None:
+            return None
+        return img, quad, placement, {"set": set_name, "printed": bool(printed), "flat": False, "wide": True}
     canvas, quad = compose(rng, board, margin, printed)
     flat = rng.random() < 0.2
     img, quad = photograph(rng, canvas, quad, flat)
@@ -407,6 +474,9 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--sets", default="", help="comma-separated: only these sets")
     ap.add_argument("--exclude", default="", help="comma-separated: leave these sets out")
+    ap.add_argument("--two-boards", action="store_true", help="every scene has two diagrams; the label is the central one")
+    ap.add_argument("--wide", action="store_true", help="large wide-angle frames with a small diagram, like a glasses photo")
+    ap.add_argument("--realistic", action="store_true", help="only positions with material a real game can have")
     args = ap.parse_args()
 
     only = set(filter(None, args.sets.split(","))) or None
@@ -417,7 +487,7 @@ def main():
     made = 0
     with open(os.path.join(args.out, "labels.jsonl"), "w") as labels:
         while made < args.count:
-            scene = make_scene(rng, sets, names)
+            scene = make_scene(rng, sets, names, two=args.two_boards, wide=args.wide, realistic=args.realistic)
             if scene is None:
                 continue
             img, quad, placement, meta = scene

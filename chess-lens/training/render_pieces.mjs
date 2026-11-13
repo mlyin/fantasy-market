@@ -1,10 +1,12 @@
-// Rasterises every lichess piece set to 128px RGBA PNGs for the synthetic data generator.
-// Usage: node training/render_pieces.mjs <lila>/public/piece <outDir>
+// Rasterises SVG piece sets to 128px RGBA PNGs for the synthetic data generator.
+// Usage: node training/render_pieces.mjs <pieceDir> <outDir> [prefix]
+//   lichess:  <lila>/public/piece            (files named wK.svg)
+//   pychess:  <pychess>/pieces  with prefix  (files named wk.svg); sets already rendered are skipped
 import { Resvg } from '@resvg/resvg-js';
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const [src, out] = process.argv.slice(2);
+const [src, out, prefix = ''] = process.argv.slice(2);
 if (!src || !out) throw new Error('usage: render_pieces.mjs <pieceDir> <outDir>');
 const SIZE = 128;
 const NAMES = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
@@ -13,10 +15,12 @@ const bad = [];
 for (const set of readdirSync(src).sort()) {
   const dir = join(src, set);
   if (!statSync(dir).isDirectory()) continue;
+  if (prefix && existsSync(join(out, set))) continue; // same set already rendered from another source
   const rendered = [];
   for (const name of NAMES) {
     try {
-      const svg = readFileSync(join(dir, `${name}.svg`));
+      const file = existsSync(join(dir, `${name}.svg`)) ? `${name}.svg` : `${name.toLowerCase()}.svg`;
+      const svg = readFileSync(join(dir, file));
       const png = new Resvg(svg, { fitTo: { mode: 'width', value: SIZE }, font: { loadSystemFonts: true } })
         .render()
         .asPng();
@@ -26,8 +30,8 @@ for (const set of readdirSync(src).sort()) {
     }
   }
   if (rendered.length !== NAMES.length) continue;
-  mkdirSync(join(out, set), { recursive: true });
-  for (const [name, png] of rendered) writeFileSync(join(out, set, `${name}.png`), png);
+  mkdirSync(join(out, prefix + set), { recursive: true });
+  for (const [name, png] of rendered) writeFileSync(join(out, prefix + set, `${name}.png`), png);
   ok++;
 }
 console.log(`rendered ${ok} sets`);

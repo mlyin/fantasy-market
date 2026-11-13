@@ -10,9 +10,9 @@ const BORDER = 7;
 
 /**
  * @param {{data: Float32Array, width: number, height: number}} img lightly blurred grayscale image
- * @returns {{x: number, y: number, strength: number}[]} sub-pixel corner candidates, strongest first
+ * @returns {{x: number, y: number, strength: number}[]} every sub-pixel corner candidate, strongest first
  */
-export function findCorners(img, { maxCorners = 700, nmsRadius = 4 } = {}) {
+export function findCorners(img, { nmsRadius = 4 } = {}) {
   const { data, width, height } = img;
   const response = new Float32Array(width * height);
   const offs = RING.map(([dx, dy]) => dy * width + dx);
@@ -73,9 +73,17 @@ export function findCorners(img, { maxCorners = 700, nmsRadius = 4 } = {}) {
     }
   }
   peaks.sort((a, b) => b.strength - a.strength);
+  return peaks.slice(0, 3000);
+}
+
+/**
+ * The corners worth fitting a lattice to. A board contributes 49 strong corners, so anything far
+ * weaker than the ~20th strongest is clutter. Calling this again after removing one board's
+ * corners re-calibrates the cut-off for a fainter second diagram.
+ * @param {{x: number, y: number, strength: number}[]} peaks strongest first
+ */
+export function strongCorners(peaks, { maxCorners = 700 } = {}) {
   if (peaks.length === 0) return peaks;
-  // A board contributes 49 strong corners; anything far weaker than the ~20th strongest is clutter.
   const ref = peaks[Math.min(19, peaks.length - 1)].strength;
-  const kept = peaks.filter((p) => p.strength >= ref * 0.12);
-  return kept.slice(0, maxCorners);
+  return peaks.filter((p) => p.strength >= ref * 0.12).slice(0, maxCorners);
 }

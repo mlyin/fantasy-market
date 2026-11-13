@@ -1,9 +1,10 @@
 // Turns synthetic scenes into classifier training crops using the exact code path the app runs.
-// Usage: node training/make_crops.mjs <sceneDir>
+// Usage: node training/make_crops.mjs <sceneDir> [--no-detect]
 // Writes crops.u8 (N * 64 * CROP * CROP), labels.u8 (N * 64 class ids) and crops.json next to the scenes.
 //
 // Every scene is cut twice: once with the outline the detector actually found (so the classifier
 // learns the detector's real residual error) and once with the true outline plus corner jitter.
+// With --no-detect both cuts use the true outline with different jitter, which is much faster.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { readPng } from '../tools/png.mjs';
@@ -13,6 +14,7 @@ import { toGray } from '../web/core/image.js';
 import { CLASSES } from '../web/core/classifier.js';
 
 const dir = process.argv[2];
+const useDetector = !process.argv.includes('--no-detect');
 const rows = readFileSync(join(dir, 'labels.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const BOARD = [[0, 0], [8, 0], [8, 8], [0, 8]];
 let seed = 12345;
@@ -34,9 +36,16 @@ for (const row of rows) {
   const q = row.quad;
   const square = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) / 8;
 
-  const det = detectBoard(img);
-  let gray = det.ok ? det.gray : toGray(img.data, img.width, img.height);
-  if (det.ok && !det.quarterTurn) {
+  const det = useDetector ? detectBoard(img) : { ok: false };
+  const gray = det.ok ? det.gray : toGray(img.data, img.width, img.height);
+  if (!useDetector) {
+    const H = fitHomography(BOARD, q.map(([x, y]) => [x + (rand() * 2 - 1) * 0.015 * square, y + (rand() * 2 - 1) * 0.015 * square]));
+    if (H) {
+      cropChunks.push(rectify(gray, H).crops);
+      labelChunks.push(labels);
+      boards.push({ file: row.file, set: row.set, source: 'near-exact' });
+    }
+  } else if (det.ok && !det.quarterTurn) {
     let worst = 0;
     for (let k = 0; k < 4; k++) worst = Math.max(worst, Math.hypot(det.quad[k][0] - q[k][0], det.quad[k][1] - q[k][1]));
     if (worst / square < 0.12) {

@@ -5,7 +5,9 @@ import { loadSaved, writeSaved } from './store.js';
 import { PIECES, pieceUrl, THEMES, loadPieceImages, drawBoard, boardPng, cellAt } from './render.js';
 
 const $ = (id) => document.getElementById(id);
-const MAX_SIDE = 1600; // longest image side handed to the scanner
+// Longest image side handed to the scanner. Glasses photos are wide-angle, so a diagram can be a
+// small part of a 12-megapixel frame; keep enough pixels for its squares to stay readable.
+const MAX_SIDE = 3200;
 
 const state = {
   model: null,
@@ -110,6 +112,9 @@ function drawSource(canvas, quad) {
   ctx.lineWidth = Math.max(2, out.width / 250);
   ctx.strokeStyle = '#e9b44c';
   ctx.stroke();
+  // Useful when judging a camera: a board needs roughly 100 px across to be read reliably.
+  const across = Math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1]);
+  $('source-info').textContent = `Photo ${canvas.width} × ${canvas.height} px · board about ${Math.round(across)} px across`;
 }
 
 async function scanBlob(blob) {
@@ -208,11 +213,15 @@ function renderResult() {
 
   const problems = problemsOf(state.cells);
   const parts = [];
-  if (state.unsure.size) {
+  if (state.unsure.size > 12) {
+    // That many doubtful squares means the picture was too small or blurred, or the outline is
+    // off: fixing squares one by one is the wrong remedy.
+    parts.push(`This scan looks unreliable (${state.unsure.size} uncertain squares). Check the outline on the photo below, or retake it closer and steadier.`);
+  } else if (state.unsure.size) {
     parts.push(`${state.unsure.size} square${state.unsure.size === 1 ? ' is' : 's are'} uncertain (dashed outline). Tap a square to correct it.`);
   }
   if (problems.length) parts.push(`Check the position: ${problems.join('; ').toLowerCase()}.`);
-  notice($('result-notice'), parts.join(' '), problems.length > 0);
+  notice($('result-notice'), parts.join(' '), problems.length > 0 || state.unsure.size > 12);
 }
 
 function lensPayload() {
@@ -330,8 +339,9 @@ function renderFinder() {
   $('video').hidden = !phone;
   $('glasses-frame').hidden = !(live && $('glasses-frame').src);
   $('finder-empty').hidden = phone || (live && Boolean($('glasses-frame').src));
-  $('start-camera').hidden = live;
-  $('finder-message').textContent = live ? 'Look at a chess diagram, then tap the button or pinch Scan in the lens.' : 'Point at a chess diagram in a book or on a screen.';
+  $('start-camera').hidden = live || Boolean(globalThis.CHESS_LENS_NO_LIVE_CAMERA);
+  if (live) $('finder-message').textContent = 'Look at a chess diagram, then tap the button or pinch Scan in the lens.';
+  else if (!globalThis.CHESS_LENS_NO_LIVE_CAMERA) $('finder-message').textContent = 'Point at a chess diagram in a book or on a screen.';
   $('finder-source').hidden = !(live || phone);
   $('finder-source').textContent = live ? 'Glasses' : 'Phone camera';
 }
@@ -490,6 +500,11 @@ $('lens-preview').addEventListener('click', () => {
 async function init() {
   renderSavedCount();
   $('glasses-card').hidden = !native.available;
+  // Some hosts (embedded previews) never allow a live camera; photos still work there.
+  if (globalThis.CHESS_LENS_NO_LIVE_CAMERA) {
+    $('start-camera').hidden = true;
+    $('finder-message').textContent = 'Take or choose a photo of a chess diagram in a book or on a screen.';
+  }
   try {
     const [manifest, weights, pieceImages] = await Promise.all([
       fetch('model/pieces-v1.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error('model manifest missing')))),
@@ -503,6 +518,15 @@ async function init() {
     notice($('capture-notice'), 'The recogniser failed to load. Reload the page to try again.', true);
   }
   native.post({ type: 'ready' });
+  // Hosts that show the page before anyone has a photo to hand can open on the bundled example.
+  if (globalThis.CHESS_LENS_OPEN_ON_SAMPLE && state.model) {
+    const result = await scanUrl('samples/book-page.jpg').catch(() => null);
+    if (result?.ok) {
+      $('result-notice').hidden = false;
+      $('result-notice').textContent = 'Example: this position was read from the sample photo below. Tap “Scan another” to try your own.';
+      $('source-details').open = true;
+    }
+  }
 }
 
 init();

@@ -62,3 +62,58 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+  chess-lens-ios:
+    # Not run yet. Needs the bundle ID com.mlyin.ChessLens registered with Apple, an App Store
+    # Connect app for it, and its App Store profile in Codemagic Code signing identities.
+    name: Chess Lens (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: codemagic
+    environment:
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mlyin.ChessLens
+      vars:
+        XCODE_PROJECT: "chess-lens/ios/ChessLens.xcodeproj"
+        XCODE_SCHEME: "ChessLens"
+    scripts:
+      - name: Check Xcode and generate the project
+        script: |
+          set -euo pipefail
+          # The Meta Wearables SDK is built with Swift 6.3 and needs Xcode 26.4 or newer.
+          xcodebuild -version
+          VERSION=$(xcodebuild -version | awk '/^Xcode/ {print $2}')
+          MAJOR=${VERSION%%.*}
+          REST=${VERSION#*.}
+          MINOR=${REST%%.*}
+          if [ "$MAJOR" -lt 26 ] || { [ "$MAJOR" -eq 26 ] && [ "${MINOR:-0}" -lt 4 ]; }; then
+            echo "Xcode $VERSION is too old for meta-wearables-dat-ios 1.0.1 (needs 26.4+)."
+            exit 1
+          fi
+          brew install xcodegen
+          xcodegen generate --spec chess-lens/ios/project.yml
+          xcodebuild -list -project "$XCODE_PROJECT"
+      - name: Set up code signing
+        script: |
+          set -euo pipefail
+          xcode-project use-profiles
+      - name: Build archive
+        script: |
+          set -euo pipefail
+          BUILD_NO=${PROJECT_BUILD_NUMBER:?Codemagic must provide PROJECT_BUILD_NUMBER}
+          xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NO"
+          APP_PATH=$(find build/ios/xcarchive -path '*/Products/Applications/ChessLens.app' -type d -print -quit)
+          test -n "$APP_PATH"
+          test -f "$APP_PATH/web/index.html"
+          test -f "$APP_PATH/web/model/pieces-v1.bin"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - build/ios/xcarchive/*.xcarchive/dSYMs/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

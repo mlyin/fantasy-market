@@ -230,7 +230,6 @@ export function fitLattice(points, { maxSeeds = 80 } = {}) {
         if (!best || score > best.score) best = { ...g, span, score };
       }
     }
-    if (best && best.score >= 44 && s >= 6) break;
   }
   if (!best || best.inliers.length < 16) return null;
   return canonicalize(points, best);

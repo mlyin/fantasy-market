@@ -22,9 +22,10 @@ export function rotate90(cells) {
  * side, so surplus kings fall back to their second choice and a missing king is taken from the
  * square that most resembles one.
  * @param {Float32Array} probs 64 * 13
+ * @param {{materialPrior?: boolean}} [options] set false to skip the material-count check
  * @returns {{cells: string[], confidence: number[]}} cells use '' for empty and FEN letters
  */
-export function decode(probs) {
+export function decode(probs, { materialPrior = true } = {}) {
   const idx = new Array(64);
   const confidence = new Array(64);
   for (let s = 0; s < 64; s++) {
@@ -67,7 +68,51 @@ export function decode(probs) {
       }
     }
   }
+  if (materialPrior) applyMaterialLimits(idx, confidence, probs);
   return { cells: idx.map((k) => CLASSES[k]), confidence };
+}
+
+// What one side starts with. More of a piece than this needs a promotion, which is rare in the
+// positions people study; more than eight pawns is impossible.
+const START_COUNTS = { P: 8, N: 2, B: 2, R: 2, Q: 1 };
+// A surplus piece is only re-read when its second choice was at least this likely relative to
+// its first. A confident reading (a real third bishop) stays.
+const DOUBT_RATIO = 0.03;
+
+/**
+ * An unfamiliar piece set can make one piece type look like another across the whole board
+ * (a tall pawn read as a bishop on all eight squares). Material counts catch that: while a side
+ * has more of a piece than it started with, the least certain of them falls back to its next
+ * most likely reading that does not itself break a limit.
+ */
+function applyMaterialLimits(idx, confidence, probs) {
+  for (const white of [true, false]) {
+    const cls = (letter) => CLASSES.indexOf(white ? letter : letter.toLowerCase());
+    const limits = new Map(Object.entries(START_COUNTS).map(([letter, n]) => [cls(letter), n]));
+    const count = (k) => idx.reduce((n, v) => n + (v === k ? 1 : 0), 0);
+    for (let guard = 0; guard < 64; guard++) {
+      let change = null;
+      for (const [k, limit] of limits) {
+        if (count(k) <= limit) continue;
+        for (let s = 0; s < 64; s++) {
+          if (idx[s] !== k) continue;
+          // Best alternative for this square: empty or a piece of the same colour with room left.
+          let alt = -1;
+          for (let c = 0; c < NC; c++) {
+            if (c === k || c === K_WHITE || c === K_BLACK) continue;
+            if (c !== 0 && (!limits.has(c) || count(c) >= limits.get(c))) continue;
+            if (alt < 0 || probs[s * NC + c] > probs[s * NC + alt]) alt = c;
+          }
+          if (alt < 0) continue;
+          const ratio = probs[s * NC + alt] / Math.max(1e-9, probs[s * NC + k]);
+          if (ratio >= DOUBT_RATIO && (!change || ratio > change.ratio)) change = { s, alt, ratio };
+        }
+      }
+      if (!change) break;
+      idx[change.s] = change.alt;
+      confidence[change.s] = Math.min(probs[change.s * NC + change.alt], 0.5);
+    }
+  }
 }
 
 /**

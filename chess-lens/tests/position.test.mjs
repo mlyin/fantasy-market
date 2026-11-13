@@ -68,6 +68,24 @@ test('decode keeps exactly one king a side when the evidence allows', () => {
   assert.equal(placementOf(none.cells), '8/8/8/8/8/8/8/3QK3');
 });
 
+test('surplus pieces fall back to their second reading, confident ones stay', () => {
+  // Eight white pawns misread as bishops (a tall pawn in an unfamiliar set), plus two real bishops.
+  const truth = cellsOf('4k3/8/8/8/8/8/PPPPPPPP/2B1KB2');
+  const overrides = {};
+  for (let s = 48; s < 56; s++) overrides[s] = { B: 0.6, P: 0.35 };
+  const fixed = decode(probsFor(truth, overrides));
+  assert.equal(placementOf(fixed.cells), '4k3/8/8/8/8/8/PPPPPPPP/2B1KB2');
+  assert.ok(fixed.confidence[48] <= 0.5, 're-read squares are marked uncertain');
+
+  // Without the check the misreading stands.
+  const raw = decode(probsFor(truth, overrides), { materialPrior: false });
+  assert.equal(placementOf(raw.cells), '4k3/8/8/8/8/8/BBBBBBBB/2B1KB2');
+
+  // A confidently read third bishop (a promotion) is left alone.
+  const promoted = cellsOf('4k3/8/8/8/8/8/8/1BB1KB2');
+  assert.equal(placementOf(decode(probsFor(promoted)).cells), '4k3/8/8/8/8/8/8/1BB1KB2');
+});
+
 test('problems are reported', () => {
   assert.deepEqual(problemsOf(cellsOf(START)), []);
   assert.deepEqual(problemsOf(cellsOf('8/8/8/8/8/8/8/4K3')), ['No black king']);

@@ -506,6 +506,10 @@ summary {
   color: var(--muted);
 }
 
+details p {
+  margin-top: 8px;
+}
+
 details canvas {
   width: 100%;
   height: auto;
