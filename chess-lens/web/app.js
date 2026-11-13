@@ -497,6 +497,18 @@ $('lens-preview').addEventListener('click', () => {
   native.post({ type: 'lensPreview', visible: lensPreviewVisible });
 });
 
+/** The classifier weights. Hosts that cannot serve binary files point to a base64 text copy. */
+async function fetchWeights() {
+  const base64Url = globalThis.CHESS_LENS_WEIGHTS_BASE64;
+  const response = await fetch(base64Url || 'model/pieces-v1.bin');
+  if (!response.ok) throw new Error('model weights missing');
+  if (!base64Url) return response.arrayBuffer();
+  const binary = atob((await response.text()).trim());
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
 async function init() {
   renderSavedCount();
   $('glasses-card').hidden = !native.available;
@@ -508,7 +520,7 @@ async function init() {
   try {
     const [manifest, weights, pieceImages] = await Promise.all([
       fetch('model/pieces-v1.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error('model manifest missing')))),
-      fetch('model/pieces-v1.bin').then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error('model weights missing')))),
+      fetchWeights(),
       loadPieceImages(),
     ]);
     state.model = loadModel(manifest, weights);
