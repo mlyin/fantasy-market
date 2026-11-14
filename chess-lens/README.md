@@ -68,7 +68,31 @@ training/   Synthetic data generator, training and evaluation scripts.
 tests/      Node tests for the core.
 ```
 
-## Run the web app
+## Run it on your own computer, open it on your phone
+
+On a Mac (or any computer with Node 20 or newer) on the same Wi-Fi as the phone:
+
+```sh
+cd chess-lens
+npm install
+npm start
+```
+
+That downloads the real-board reader once (about 70 MB), serves the app to the local network,
+prints a QR code in the terminal and, on a Mac, opens a large copy of it. Scan it with the phone.
+Nothing leaves your network, and it stops when you close the terminal.
+
+- Over plain `http` a phone browser will not open a live camera, so the app offers **Choose photo**
+  (then **Take Photo**) instead. That is a full-resolution photo and works well.
+- For a live viewfinder run `npm start -- --https`. It makes a throwaway certificate, so the phone
+  warns once; choose **Show Details**, then **visit this website**.
+- macOS may ask whether `node` may accept incoming connections: allow it.
+
+A page in the phone's browser uses the phone's camera. The glasses' camera is only reachable from
+the iPhone app; on a Mac with Xcode, `bash ios/open-in-xcode.sh` prepares it and opens it in Xcode
+(see [`ios/README.md`](ios/README.md)).
+
+## Develop the web app
 
 ```sh
 cd chess-lens

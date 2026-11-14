@@ -1,13 +1,12 @@
-// Static file server for web/ during development: `npm run dev`, then open http://localhost:8787.
-// The camera needs a secure context, which localhost is; to try it on a phone, put the folder
-// behind HTTPS (any static host works, there is no build step).
-import { createServer } from 'node:http';
+// Static file server for web/. `npm run dev` serves it on this machine only
+// (http://localhost:8787); `npm start` (tools/start.mjs) uses it to serve the local network.
+import { createServer as createHttp } from 'node:http';
+import { createServer as createHttps } from 'node:https';
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('../web', import.meta.url)));
-const port = Number(process.env.PORT || 8787);
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -21,8 +20,14 @@ const types = {
   '.mjs': 'text/javascript; charset=utf-8',
 };
 
-createServer(async (req, res) => {
-  const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+async function handle(req, res) {
+  let path;
+  try {
+    path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
+  } catch {
+    res.writeHead(400).end();
+    return;
+  }
   const file = normalize(join(root, path.endsWith('/') ? path + 'index.html' : path));
   if (file !== root && !file.startsWith(root + sep)) {
     res.writeHead(403).end();
@@ -31,8 +36,26 @@ createServer(async (req, res) => {
   try {
     const body = await readFile(file);
     res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream', 'cache-control': 'no-store' });
-    res.end(body);
+    res.end(req.method === 'HEAD' ? undefined : body);
   } catch {
     res.writeHead(404, { 'content-type': 'text/plain' }).end('not found');
   }
-}).listen(port, () => console.log(`Chess Lens on http://localhost:${port}`));
+}
+
+/**
+ * @param {{port: number, host: string, tls?: {key: Buffer, cert: Buffer}}} options
+ * @returns {Promise<import('node:http').Server>} resolves once it is listening
+ */
+export function serve({ port, host, tls }) {
+  const server = tls ? createHttps(tls, handle) : createHttp(handle);
+  return new Promise((resolveListen, reject) => {
+    server.once('error', reject);
+    server.listen(port, host, () => resolveListen(server));
+  });
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const port = Number(process.env.PORT || 8787);
+  await serve({ port, host: process.env.HOST || '127.0.0.1' });
+  console.log(`Chess Lens on http://localhost:${port}`);
+}

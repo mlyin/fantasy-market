@@ -38,7 +38,7 @@ const wrong = (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 0 : 1), 0);
   try {
     const page = await browser.newPage();
     page.on('pageerror', (e) => console.error('page error:', e.message));
-    await page.goto(`http://localhost:${port}/`);
+    await page.goto(`http://127.0.0.1:${port}/`);
     for (const label of labels) {
       const dataUrl = 'data:image/jpeg;base64,' + readFileSync(join(__dirname, label.file)).toString('base64');
       let result;

@@ -566,6 +566,8 @@ async function fetchWeights() {
 }
 
 async function init() {
+  // A phone browser only opens a live camera on https (or localhost). Elsewhere, photos still work.
+  if (!globalThis.isSecureContext || !navigator.mediaDevices?.getUserMedia) globalThis.CHESS_LENS_NO_LIVE_CAMERA = true;
   renderSavedCount();
   $('glasses-card').hidden = !native.available;
   // Some hosts (embedded previews) cannot fetch the real-board reader; they keep to diagrams.

@@ -11,6 +11,17 @@ It compiles: the GitHub Actions workflow `chess-lens-ios.yml` builds it for the 
 archives it for a device, unsigned, against the real SDK. It has not been launched on a
 simulator, an iPhone or real glasses yet, so treat the first run as a test.
 
+## Quickest way, on a Mac
+
+```sh
+bash chess-lens/ios/open-in-xcode.sh
+```
+
+It checks Xcode, bundles the real-board reader, generates the project and opens it. In Xcode,
+choose your Apple ID team under Signing & Capabilities, select your iPhone, and press Run. A free
+Apple ID works; the app then needs re-running from Xcode every seven days. The script has not been
+run on a Mac; its steps are the ones the GitHub build runs.
+
 ## Build
 
 Before generating the project, bundle the real-board reader so the app works offline (the
