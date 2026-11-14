@@ -1,0 +1,32 @@
+[
+ {
+  "file": "board_00.jpg",
+  "placement": "2K5/1Q3b2/1p6/8/8/2k5/8/8",
+  "source": "2K5-1Q3b2-1p6-8-8-2k5-8-8.JPG"
+ },
+ {
+  "file": "board_01.jpg",
+  "placement": "4k3/1pR5/8/8/8/6P1/1PP4q/1K1R4",
+  "source": "4k3-1pR5-8-8-8-6P1-1PP4q-1K1R4.JPG"
+ },
+ {
+  "file": "board_02.jpg",
+  "placement": "6k1/1p2b2p/2n2p2/2p5/p4B1N/2P3P1/1P4BP/3b2K1",
+  "source": "6k1-1p2b2p-2n2p2-2p5-p4B1N-2P3P1-1P4BP-3b2K1.JPG"
+ },
+ {
+  "file": "board_03.jpg",
+  "placement": "8/8/5b2/2k5/2p3P1/p7/K6P/3B4",
+  "source": "8-8-5b2-2k5-2p3P1-p7-K6P-3B4.JPG"
+ },
+ {
+  "file": "board_04.jpg",
+  "placement": "r1bqk2r/ppp2ppp/2nbpn2/8/2BP4/2N1PN2/PP3PPP/R1BQK2R",
+  "source": "r1bqk2r-ppp2ppp-2nbpn2-8-2BP4-2N1PN2-PP3PPP-R1BQK2R.JPG"
+ },
+ {
+  "file": "board_05.jpg",
+  "placement": "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR",
+  "source": "rnbqkbnr-pp1ppppp-8-2p5-4P3-8-PPPP1PPP-RNBQKBNR.JPG"
+ }
+]

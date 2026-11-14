@@ -1,0 +1,38 @@
+name: Chess Lens web tests
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'chess-lens/web/**'
+      - 'chess-lens/tests/**'
+      - 'chess-lens/tools/**'
+      - 'chess-lens/package*.json'
+      - '.github/workflows/chess-lens-web.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chess-lens-web-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: chess-lens
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Unit and diagram tests
+        run: npm test
+      - name: Fetch the real-board reader
+        run: npm run vendor:offline
+      - name: Real-board reader on real photos
+        run: |
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+          npm run test:real
