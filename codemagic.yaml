@@ -92,6 +92,8 @@ workflows:
             echo "Xcode $VERSION is too old for meta-wearables-dat-ios 1.0.1 (needs 26.4+)."
             exit 1
           fi
+          # Bundle the real-board reader (LiteRT runtime + model, checksum-pinned) so it works offline.
+          (cd chess-lens && npm ci && npm run vendor:offline)
           brew install xcodegen
           xcodegen generate --spec chess-lens/ios/project.yml
           xcodebuild -list -project "$XCODE_PROJECT"
@@ -109,6 +111,8 @@ workflows:
           test -n "$APP_PATH"
           test -f "$APP_PATH/web/index.html"
           test -f "$APP_PATH/web/model/pieces-v1.bin"
+          test -f "$APP_PATH/web/vendor/chesscam-model/chessq-chesscam-mnv4m-320-v1-fp16.tflite"
+          test -f "$APP_PATH/web/vendor/litert/litert_wasm_internal.wasm"
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log

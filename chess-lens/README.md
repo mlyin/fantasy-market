@@ -1,15 +1,16 @@
 # Chess Lens
 
-Look at a chess diagram, get the position. Chess Lens reads a board from a photo taken with Meta
-glasses or a phone camera, shows it as an editable board, and hands it to an analysis board. It is
-a study tool for books, magazines and positions on a screen.
+Look at a chess board, get the position. Chess Lens reads a board from a photo taken with Meta
+glasses or a phone camera, shows it as an editable board, and hands it to an analysis board. It
+has two modes: **Real board** for physical pieces on a table, and **Book or screen** for printed
+and on-screen diagrams.
 
 Separate from Fantasy Market; it only shares this repository.
 
 ## What it does
 
 1. **Finds the board** in the photo, at an angle, with text and clutter around it.
-2. **Reads the pieces** with a small classifier that runs on the device. Photos are not uploaded.
+2. **Reads the pieces** on the device. Photos are not uploaded.
 3. **Shows the position** next to the photo. Squares it was unsure of are outlined; tap a square to
    fix it. Swap sides if the diagram was drawn from Black's point of view, set who is to move.
 4. **Exports** the FEN, opens the position on Lichess, or saves it for later.
@@ -17,15 +18,39 @@ Separate from Fantasy Market; it only shares this repository.
 With Meta Ray-Ban Display glasses the loop is hands-free: pinch **Scan** in the lens, the glasses
 take the photo, and the recognised board appears in the lens a moment later.
 
-## What it reads, and what it does not
+## What it reads
 
-| Source | Status |
-| --- | --- |
-| Printed diagrams (books, magazines, worksheets) | Supported |
-| Diagrams on a screen (Lichess, Chess.com, videos, PDFs) | Supported |
-| A physical board with real pieces | **Not supported.** The piece recogniser has only been trained on flat, drawn pieces. |
+| Source | Mode | Status |
+| --- | --- | --- |
+| A physical board with real pieces | Real board | Wired in, **not yet tested on recognition** (see below) |
+| Printed diagrams (books, magazines, worksheets) | Book or screen | Supported; accuracy measured on synthetic photos |
+| Diagrams on a screen (Lichess, Chess.com, videos, PDFs) | Book or screen | Supported; accuracy measured on synthetic photos |
 
-Accuracy so far is measured on synthetic photos only (see [Accuracy](#accuracy)). It has not been
+### Real board
+
+Real pieces are read by the model behind [ChessCam](https://www.chesscam.net), through its
+[`@chesscam/recorder`](https://www.npmjs.com/package/@chesscam/recorder) library and LiteRT.js.
+Chess Lens finds the board in the photo with its own board finder, hands the reader that region
+(the board plus room for the pieces standing on it), and turns the answer into the same editable
+position as the diagram mode. The reader works out which side is White by itself; **Swap sides**
+and **Rotate** correct it when it is wrong.
+
+What is and is not verified:
+
+- The board finder located the board in 40 of 40 real photos of a tournament-style board with
+  pieces on it, taken from above.
+- The reader's runtime loads and starts in a browser, and a failed model download is reported.
+- **Recognition itself has not been run here.** The model could not be downloaded into the
+  development session, so there are no accuracy numbers for real boards yet, and none for the view
+  from a seat at the table, which is what glasses see. ChessCam is built for a phone on a stand
+  beside the board; a head-height view is a different angle. Expect to find out on the first try.
+
+The model (about 24 MB) is under the **PolyForm Noncommercial License 1.0.0**: personal and other
+non-commercial use only. It is not in this repository. A plain web deployment downloads it from
+Hugging Face, and the runtime from jsDelivr, the first time Real board is used. The iOS builds
+bundle both with `npm run vendor:offline`, checksum-pinned, so the app works without a connection.
+
+Diagram accuracy is measured on synthetic photos only (see [Accuracy](#accuracy)). Nothing has been
 tried on photos from real glasses yet.
 
 ## Layout
@@ -33,7 +58,8 @@ tried on photos from real glasses yet.
 ```
 web/        The app. Static files, no build step. Runs in any browser and inside the iOS shell.
   core/     Recognition: board finder, square classifier, position logic. No DOM, runs in Node too.
-  model/    Classifier weights (float32) and manifest.
+  model/    Diagram classifier weights (float32) and manifest.
+  vendor/   Third-party code for the real-board reader (built by tools/vendor.mjs).
 ios/        SwiftUI shell: hosts web/ in a WKWebView and connects the glasses. See ios/README.md.
 training/   Synthetic data generator, training and evaluation scripts.
 tests/      Node tests for the core.
@@ -48,8 +74,9 @@ npm run dev        # http://localhost:8787
 npm test
 ```
 
-Tap **Try sample** to scan a bundled page, **Choose photo** to pick a picture (including one the
-glasses saved to your camera roll), or **Use phone camera** for a live viewfinder. The camera needs
+Pick **Real board** or **Book or screen** at the top. Tap **Try sample** to scan a bundled photo,
+**Choose photo** to pick a picture (including one the glasses saved to your camera roll), or
+**Use phone camera** for a live viewfinder. The camera needs
 HTTPS anywhere other than localhost; any static host works since there is nothing to build.
 
 ## Run it with glasses
@@ -130,11 +157,16 @@ The quickest way to raise the held-out row is more piece styles: add a set to st
 
 ## Licences of bundled material
 
+- Real-board reader: `web/vendor/chesscam/` bundles @chesscam/recorder (MIT) and @litertjs/core
+  (Apache 2.0); see `LICENSES.md` there. The model they run is PolyForm Noncommercial 1.0.0 and is
+  fetched, not committed.
 - UI piece images: "chessnut" by Alexis Luengas, Apache 2.0 (`web/pieces/NOTICE.md`).
 - The classifier was trained on renders of the piece sets distributed with lichess.org and
   pychess, which carry a mix of licences (GPL, CC BY-NC-SA, and others), and of the DejaVu,
   FreeSerif and Unifont chess glyphs. Only the trained weights are in this repository, not the
   artwork. If you plan to distribute the app commercially, review that.
+- `web/samples/real-board.jpg` is from the MIT-licensed Chess Board Dataset
+  (`web/samples/NOTICE.md`).
 - The sample page and the test photos are generated by `training/make_sample.py` and
   `training/make_fixtures.py` from sets that allow redistribution (chessnut: Apache 2.0; fantasy,
   spatial, celtic: MIT; rhosgfx: CC0).

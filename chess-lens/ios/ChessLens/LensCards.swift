@@ -45,7 +45,7 @@ enum LensCards {
     FlexBox(direction: .column, spacing: 12) {
       FlexBox(direction: .column, spacing: 8) {
         Text("Chess Lens", style: .heading)
-        Text("Look at a chess diagram, then select Scan.", style: .body, color: .secondary)
+        Text("Look at the board, then select Scan.", style: .body, color: .secondary)
       }
       .padding(24)
       .background(.card)

@@ -17,6 +17,8 @@ const types = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.bin': 'application/octet-stream',
+  '.wasm': 'application/wasm',
+  '.mjs': 'text/javascript; charset=utf-8',
 };
 
 createServer(async (req, res) => {

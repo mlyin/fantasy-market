@@ -16,6 +16,11 @@
     <main>
       <!-- Capture -->
       <section id="view-capture" class="view">
+        <div class="segmented wide" id="mode-switch" role="group" aria-label="What to scan">
+          <button id="mode-real" type="button" aria-pressed="true">Real board</button>
+          <button id="mode-diagram" type="button" aria-pressed="false">Book or screen</button>
+        </div>
+
         <div class="finder" id="finder">
           <video id="video" playsinline muted hidden></video>
           <img id="glasses-frame" alt="Live view from the glasses" hidden />
@@ -55,9 +60,7 @@
           </label>
         </section>
 
-        <p class="muted small">
-          Reads printed and on-screen diagrams. Everything runs on this device; photos are not uploaded.
-        </p>
+        <p class="muted small" id="mode-hint"></p>
       </section>
 
       <!-- Result -->

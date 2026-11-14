@@ -1,2 +1,5 @@
 node_modules/
 __pycache__/
+# Fetched by `npm run vendor:offline`: large, and the model has its own licence
+web/vendor/litert/
+web/vendor/chesscam-model/

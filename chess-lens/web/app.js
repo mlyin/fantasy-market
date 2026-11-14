@@ -1,6 +1,7 @@
 import { scan, loadModel } from './core/scan.js';
 import { rotate180, rotate90, fenOf, cellsOf, problemsOf, describe } from './core/position.js';
 import { native } from './native.js';
+import { scanRealBoard, realBoardReady } from './realboard.js';
 import { loadSaved, writeSaved } from './store.js';
 import { PIECES, pieceUrl, THEMES, loadPieceImages, drawBoard, boardPng, cellAt } from './render.js';
 
@@ -20,7 +21,11 @@ const state = {
   viewFlipped: false,
   selected: null, // cell index
   saved: loadSaved(),
+  // 'real': physical board with real pieces. 'diagram': a printed or on-screen diagram.
+  mode: 'real',
 };
+const MODE_KEY = 'chesslens.mode';
+const realBoardAvailable = () => !globalThis.CHESS_LENS_NO_REAL_BOARD;
 
 /* ---------- views ---------- */
 
@@ -74,14 +79,7 @@ async function canvasFromBlob(blob) {
 
 /** @returns the scan result, after showing it (or the failure) on the page. */
 async function scanCanvas(canvas) {
-  if (!state.model) {
-    notice($('capture-notice'), 'The recogniser is still loading. Try again in a moment.', true);
-    return { ok: false, message: 'Recogniser not loaded' };
-  }
-  const result = await busy('Scanning…', () => {
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    return scan(state.model, ctx.getImageData(0, 0, canvas.width, canvas.height));
-  });
+  const result = state.mode === 'real' ? await readRealBoard(canvas) : await readDiagram(canvas);
   if (!result.ok) {
     show('capture');
     notice($('capture-notice'), result.message, true);
@@ -93,28 +91,61 @@ async function scanCanvas(canvas) {
   state.turn = 'w';
   state.viewFlipped = result.flipped;
   state.selected = null;
-  drawSource(canvas, result.quad);
+  state.scanNote = result.located === false ? 'The board outline was not found, so the whole picture was read. Get closer so the board fills the view.' : '';
+  drawSource(canvas, result);
   renderResult();
   show('result');
   return result;
 }
 
-function drawSource(canvas, quad) {
+async function readDiagram(canvas) {
+  if (!state.model) return { ok: false, message: 'The recogniser is still loading. Try again in a moment.' };
+  return busy('Scanning…', () => {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    return scan(state.model, ctx.getImageData(0, 0, canvas.width, canvas.height));
+  });
+}
+
+async function readRealBoard(canvas) {
+  const label = realBoardReady() ? 'Reading the board…' : 'Getting the board reader ready (about 24 MB the first time)…';
+  try {
+    return await busy(label, () => scanRealBoard(canvas));
+  } catch (err) {
+    console.error(err);
+    const offline = navigator.onLine === false;
+    return {
+      ok: false,
+      message: offline
+        ? 'The board reader has to be downloaded once and this device is offline. Connect and try again.'
+        : `The board reader could not start (${err?.message || 'unknown error'}). Check the connection and try again.`,
+    };
+  }
+}
+
+function drawSource(canvas, result) {
   const out = $('source-canvas');
   const scale = Math.min(1, 900 / Math.max(canvas.width, canvas.height));
   out.width = Math.round(canvas.width * scale);
   out.height = Math.round(canvas.height * scale);
   const ctx = out.getContext('2d');
   ctx.drawImage(canvas, 0, 0, out.width, out.height);
-  ctx.beginPath();
-  quad.forEach(([x, y], i) => (i ? ctx.lineTo(x * scale, y * scale) : ctx.moveTo(x * scale, y * scale)));
-  ctx.closePath();
   ctx.lineWidth = Math.max(2, out.width / 250);
   ctx.strokeStyle = '#e9b44c';
-  ctx.stroke();
-  // Useful when judging a camera: a board needs roughly 100 px across to be read reliably.
-  const across = Math.hypot(quad[1][0] - quad[0][0], quad[1][1] - quad[0][1]);
-  $('source-info').textContent = `Photo ${canvas.width} × ${canvas.height} px · board about ${Math.round(across)} px across`;
+  if (result.quad) {
+    ctx.beginPath();
+    result.quad.forEach(([x, y], i) => (i ? ctx.lineTo(x * scale, y * scale) : ctx.moveTo(x * scale, y * scale)));
+    ctx.closePath();
+    ctx.stroke();
+  }
+  if (result.roi) {
+    // Where the reader looked: the board plus room for the pieces standing on it.
+    ctx.setLineDash([10, 8]);
+    ctx.strokeRect(result.roi.x * scale, result.roi.y * scale, result.roi.width * scale, result.roi.height * scale);
+    ctx.setLineDash([]);
+  }
+  // Useful when judging a camera: a board needs roughly 200 px across to be read reliably.
+  const across = result.quad ? Math.hypot(result.quad[1][0] - result.quad[0][0], result.quad[1][1] - result.quad[0][1]) : 0;
+  $('source-info').textContent = `Photo ${canvas.width} × ${canvas.height} px` + (across ? ` · board about ${Math.round(across)} px across` : '');
 }
 
 async function scanBlob(blob) {
@@ -213,6 +244,7 @@ function renderResult() {
 
   const problems = problemsOf(state.cells);
   const parts = [];
+  if (state.scanNote) parts.push(state.scanNote);
   if (state.unsure.size > 12) {
     // That many doubtful squares means the picture was too small or blurred, or the outline is
     // off: fixing squares one by one is the wrong remedy.
@@ -282,6 +314,7 @@ function renderSaved() {
       state.turn = entry.fen.split(' ')[1] === 'b' ? 'b' : 'w';
       state.viewFlipped = Boolean(entry.flipped);
       state.selected = null;
+      state.scanNote = '';
       $('source-details').hidden = true;
       renderResult();
       show('result');
@@ -340,8 +373,10 @@ function renderFinder() {
   $('glasses-frame').hidden = !(live && $('glasses-frame').src);
   $('finder-empty').hidden = phone || (live && Boolean($('glasses-frame').src));
   $('start-camera').hidden = live || Boolean(globalThis.CHESS_LENS_NO_LIVE_CAMERA);
-  if (live) $('finder-message').textContent = 'Look at a chess diagram, then tap the button or pinch Scan in the lens.';
-  else if (!globalThis.CHESS_LENS_NO_LIVE_CAMERA) $('finder-message').textContent = 'Point at a chess diagram in a book or on a screen.';
+  const subject = state.mode === 'real' ? 'the board, all four edges in view' : 'a chess diagram in a book or on a screen';
+  if (live) $('finder-message').textContent = `Look at ${subject}, then tap the button or pinch Scan in the lens.`;
+  else if (globalThis.CHESS_LENS_NO_LIVE_CAMERA) $('finder-message').textContent = `Take or choose a photo of ${subject}.`;
+  else $('finder-message').textContent = `Point at ${subject}.`;
   $('finder-source').hidden = !(live || phone);
   $('finder-source').textContent = live ? 'Glasses' : 'Phone camera';
 }
@@ -426,8 +461,29 @@ $('file').addEventListener('change', async (event) => {
   if (file) await scanBlob(file);
 });
 $('try-sample').addEventListener('click', () =>
-  scanUrl('samples/book-page.jpg').catch(() => notice($('capture-notice'), 'The sample picture is missing.', true)),
+  scanUrl(state.mode === 'real' ? 'samples/real-board.jpg' : 'samples/book-page.jpg').catch(() =>
+    notice($('capture-notice'), 'The sample picture is missing.', true),
+  ),
 );
+
+function setMode(mode) {
+  state.mode = mode === 'real' && realBoardAvailable() ? 'real' : 'diagram';
+  try {
+    localStorage.setItem(MODE_KEY, state.mode);
+  } catch {
+    // Not remembered; the control still works for this visit.
+  }
+  $('mode-real').setAttribute('aria-pressed', String(state.mode === 'real'));
+  $('mode-diagram').setAttribute('aria-pressed', String(state.mode === 'diagram'));
+  $('mode-hint').textContent =
+    state.mode === 'real'
+      ? 'Reads real pieces on a real board. The reader runs on this device.'
+      : 'Reads printed and on-screen diagrams. Everything runs on this device; photos are not uploaded.';
+  notice($('capture-notice'), '');
+  renderFinder();
+}
+$('mode-real').addEventListener('click', () => setMode('real'));
+$('mode-diagram').addEventListener('click', () => setMode('diagram'));
 
 $('board').addEventListener('click', (event) => {
   const sq = event.target.closest('.sq');
@@ -512,11 +568,15 @@ async function fetchWeights() {
 async function init() {
   renderSavedCount();
   $('glasses-card').hidden = !native.available;
-  // Some hosts (embedded previews) never allow a live camera; photos still work there.
-  if (globalThis.CHESS_LENS_NO_LIVE_CAMERA) {
-    $('start-camera').hidden = true;
-    $('finder-message').textContent = 'Take or choose a photo of a chess diagram in a book or on a screen.';
+  // Some hosts (embedded previews) cannot fetch the real-board reader; they keep to diagrams.
+  $('mode-switch').hidden = !realBoardAvailable();
+  let remembered = null;
+  try {
+    remembered = localStorage.getItem(MODE_KEY);
+  } catch {
+    // Storage unavailable: start in the default mode.
   }
+  setMode(remembered || 'real');
   try {
     const [manifest, weights, pieceImages] = await Promise.all([
       fetch('model/pieces-v1.json').then((r) => (r.ok ? r.json() : Promise.reject(new Error('model manifest missing')))),

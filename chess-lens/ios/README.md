@@ -13,6 +13,17 @@ simulator, an iPhone or real glasses yet, so treat the first run as a test.
 
 ## Build
 
+Before generating the project, bundle the real-board reader so the app works offline (the
+GitHub and Codemagic builds do this themselves):
+
+```sh
+cd chess-lens && npm ci && npm run vendor:offline
+```
+
+That copies the LiteRT runtime and downloads the ChessCam model (about 24 MB, PolyForm
+Noncommercial licence, checksum-pinned) into `web/vendor/`. Without it the app downloads both the
+first time **Real board** is used.
+
 Needs macOS with **Xcode 26.4 or newer** (the SDK's frameworks are built with Swift 6.3) and
 XcodeGen. The Xcode project is generated and not checked in; edit `project.yml` instead.
 
@@ -77,6 +88,8 @@ choice is remembered.
 4. On Meta Ray-Ban Display, the lens shows a **Scan** button. Selecting it takes a photo,
    the phone recognises the position, and the lens shows the board with **Scan** and
    **Flip**. Other Meta glasses work as a camera only; trigger the scan from the phone.
+5. The phone app's **Real board** / **Book or screen** switch decides how the photo is read.
+   For a real board, look at it so all four edges are in view before selecting Scan.
 
 **Keep the app open and on screen while scanning.** Recognition runs in the web view, which
 iOS suspends in the background, so the app keeps the phone awake while a glasses session

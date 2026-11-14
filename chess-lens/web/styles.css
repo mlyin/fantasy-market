@@ -464,6 +464,14 @@ input:focus-visible {
   overflow: hidden;
 }
 
+.segmented.wide {
+  display: flex;
+}
+
+.segmented.wide button {
+  flex: 1;
+}
+
 .segmented button {
   border-radius: 0;
   background: var(--surface-2);

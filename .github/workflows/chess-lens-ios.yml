@@ -40,6 +40,10 @@ jobs:
         run: |
           set -euo pipefail
           HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          # Bundle the real-board reader (LiteRT runtime + model) so the app works offline.
+          # This build is only a compile check, so a failed download is a warning here.
+          (cd chess-lens && npm ci && npm run vendor:offline) \
+            || echo "::warning::Could not bundle the real-board reader; the app would download it at first use."
           if [ ! -f chess-lens/web/index.html ]; then
             echo "::warning::chess-lens/web/index.html is missing; the app will build but open on a 404 page."
           fi
@@ -70,6 +74,9 @@ jobs:
           test -d "$APP/web"
           ls "$APP/web"
           ls "$APP/Frameworks" || true
+          test -f "$APP/web/vendor/chesscam/recorder.js"
+          test -f "$APP/web/vendor/chesscam/worker.js"
+          ls -la "$APP/web/vendor/chesscam-model" "$APP/web/vendor/litert" || echo "::warning::real-board reader not bundled"
           test "$(/usr/libexec/PlistBuddy -c 'Print :MWDAT:AppLinkURLScheme' "$APP/Info.plist")" = "chesslens-app://"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$APP/Info.plist")" = "chesslens-app"
           /usr/libexec/PlistBuddy -c 'Print :UISupportedExternalAccessoryProtocols' "$APP/Info.plist"
