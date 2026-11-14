@@ -4,8 +4,9 @@
 //   npm run vendor:offline        (LiteRT runtime + model into web/vendor)
 //   node tests/real/run.cjs       (CHROMIUM_PATH=/path/to/chrome to use a specific browser)
 //
-// It fails only when the reader cannot run at all; accuracy is reported, not asserted, until there
-// is enough evidence to set a bar.
+// It fails when the reader cannot run, or when any photo comes back with more than MAX_WRONG
+// squares wrong. The first run read all six photos without a single wrong square.
+const MAX_WRONG = 2;
 const { chromium } = require('playwright');
 const { spawn } = require('node:child_process');
 const { readFileSync, appendFileSync } = require('node:fs');
@@ -94,7 +95,9 @@ const wrong = (a, b) => a.reduce((n, v, i) => n + (v === b[i] ? 0 : 1), 0);
   const report = lines.join('\n');
   console.log(report);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Real-board reader on real photos\n\n${report}\n`);
-  process.exit(failed ? 1 : 0);
+  const tooMany = ok.filter((r) => r.wrong > MAX_WRONG);
+  if (tooMany.length) console.error(`More than ${MAX_WRONG} squares wrong in: ${tooMany.map((r) => r.file).join(', ')}`);
+  process.exit(failed || tooMany.length ? 1 : 0);
 })().catch((err) => {
   console.error(err);
   process.exit(1);

@@ -22,7 +22,7 @@ take the photo, and the recognised board appears in the lens a moment later.
 
 | Source | Mode | Status |
 | --- | --- | --- |
-| A physical board with real pieces | Real board | Wired in, **not yet tested on recognition** (see below) |
+| A physical board with real pieces | Real board | Reads real photos taken from above correctly; the view from a seat is untested (see below) |
 | Printed diagrams (books, magazines, worksheets) | Book or screen | Supported; accuracy measured on synthetic photos |
 | Diagrams on a screen (Lichess, Chess.com, videos, PDFs) | Book or screen | Supported; accuracy measured on synthetic photos |
 
@@ -37,21 +37,24 @@ and **Rotate** correct it when it is wrong.
 
 What is and is not verified:
 
-- The board finder located the board in 40 of 40 real photos of a tournament-style board with
-  pieces on it, taken from above.
-- The reader's runtime loads and starts in a browser, and a failed model download is reported.
-- **Recognition itself has not been run here.** The model could not be downloaded into the
-  development session, so there are no accuracy numbers for real boards yet, and none for the view
-  from a seat at the table, which is what glasses see. ChessCam is built for a phone on a stand
-  beside the board; a head-height view is a different angle. Expect to find out on the first try.
+- **Six of six real photos read exactly right** (all 384 squares, positions from 5 to 32 pieces,
+  about 0.4 s each), by `npm run test:real` in a headless browser on the GitHub runner. The photos
+  are in `tests/real`.
+- The board finder located the board in 40 of 40 real photos from the same source.
+- Those photos are all taken **from directly above, of one board with one piece set**. Not tested:
+  the view from a seat at the table, which is what glasses see and where pieces hide each other;
+  other piece sets and boards; outdoor light. ChessCam is built for a phone on a stand beside the
+  board, so a steep look down at the board is the safest bet: lean in until all four edges are in
+  view.
+- The reader has run in desktop Chromium only. It has not been run inside the iOS app's web view.
 
 The model (about 24 MB) is under the **PolyForm Noncommercial License 1.0.0**: personal and other
 non-commercial use only. It is not in this repository. A plain web deployment downloads it from
 Hugging Face, and the runtime from jsDelivr, the first time Real board is used. The iOS builds
 bundle both with `npm run vendor:offline`, checksum-pinned, so the app works without a connection.
 
-Diagram accuracy is measured on synthetic photos only (see [Accuracy](#accuracy)). Nothing has been
-tried on photos from real glasses yet.
+Diagram accuracy is measured on synthetic photos only (see [Accuracy](#accuracy)). Nothing in
+either mode has been tried on photos from real glasses yet.
 
 ## Layout
 
@@ -71,7 +74,8 @@ tests/      Node tests for the core.
 cd chess-lens
 npm install        # dev tools only; the app itself has no dependencies
 npm run dev        # http://localhost:8787
-npm test
+npm test           # unit tests and diagram photos
+npm run vendor:offline && npm run test:real   # real-board reader on real photos (needs Playwright)
 ```
 
 Pick **Real board** or **Book or screen** at the top. Tap **Try sample** to scan a bundled photo,
