@@ -74,16 +74,33 @@ if (process.argv.includes('--offline')) {
   if (existsSync(target) && sha256(readFileSync(target)) === MODEL.sha256) {
     console.log('model already present');
   } else {
+    // Connections to the file host drop now and then, so each file gets a few attempts.
     const get = async (name) => {
-      const response = await fetch(`${MODEL.base}/${name}`);
-      if (!response.ok) throw new Error(`downloading ${name}: ${response.status} ${response.statusText}`);
-      return Buffer.from(await response.arrayBuffer());
+      let last;
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          const response = await fetch(`${MODEL.base}/${name}`);
+          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+          return Buffer.from(await response.arrayBuffer());
+        } catch (err) {
+          last = err;
+          if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
+        }
+      }
+      throw new Error(`downloading ${name} failed after 4 attempts: ${last?.cause?.code || last?.message}`);
     };
-    const bytes = await get(MODEL.file);
-    if (sha256(bytes) !== MODEL.sha256) throw new Error(`${MODEL.file} does not match the pinned SHA-256`);
-    writeFileSync(target, bytes);
-    // The licence has to travel with the weights.
-    for (const name of ['LICENSE', 'NOTICE']) writeFileSync(join(modelDir, name), await get(name));
-    console.log(`downloaded ${MODEL.file} (${(bytes.length / 1e6).toFixed(1)} MB) with its LICENSE and NOTICE`);
+    try {
+      const bytes = await get(MODEL.file);
+      if (sha256(bytes) !== MODEL.sha256) throw new Error(`${MODEL.file} does not match the pinned SHA-256`);
+      // The licence has to travel with the weights, so the model is only kept once both are here.
+      const notices = [];
+      for (const name of ['LICENSE', 'NOTICE']) notices.push([name, await get(name)]);
+      for (const [name, body] of notices) writeFileSync(join(modelDir, name), body);
+      writeFileSync(target, bytes);
+      console.log(`downloaded ${MODEL.file} (${(bytes.length / 1e6).toFixed(1)} MB) with its LICENSE and NOTICE`);
+    } catch (err) {
+      console.error(`Could not fetch the model: ${err.message}`);
+      process.exit(1);
+    }
   }
 }
